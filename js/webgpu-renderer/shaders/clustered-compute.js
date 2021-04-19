@@ -76,13 +76,13 @@ export const ClusterLightsStructs = `
   [[block]] struct ClusterLightGroup {
     lights : [[stride(${CLUSTER_LIGHTS_SIZE})]] array<ClusterLights, ${TOTAL_TILES}>;
   };
-  [[group(${BIND_GROUP.Frame}), binding(3)]] var<storage> clusterLights : ClusterLightGroup;
+  [[group(${BIND_GROUP.Frame}), binding(3)]] var<storage> clusterLights : [[access(read_write)]] ClusterLightGroup;
 `;
 
 export const ClusterBoundsSource = `
   ${ProjectionUniforms}
   ${ClusterStructs}
-  [[group(1), binding(0)]] var<storage> clusters : Clusters;
+  [[group(1), binding(0)]] var<storage> clusters : [[access(write)]] Clusters;
 
   fn lineIntersectionToZPlane(a : vec3<f32>, b : vec3<f32>, zDistance : f32) -> vec3<f32> {
     let normal : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);

@@ -23,6 +23,8 @@ import { ProjectionUniforms, ViewUniforms, ModelUniforms, LightUniforms, Materia
 import { ClusterLightsStructs, TileFunctions } from '../shaders/clustered-compute.js';
 
 function PBR_VARYINGS(defines) { return wgsl`
+struct VertexOutput {
+  [[builtin(position)]] position : vec4<f32>;
   [[location(0)]] worldPos : vec3<f32>;
   [[location(1)]] view : vec3<f32>; // Vector from vertex to camera.
   [[location(2)]] texCoord : vec2<f32>;
@@ -33,6 +35,7 @@ function PBR_VARYINGS(defines) { return wgsl`
 #else
   [[location(4)]] normal : vec3<f32>;
 #endif
+};
 `;
 }
 
@@ -53,10 +56,7 @@ export function PBRVertexSource(defines) { return wgsl`
 #endif
   };
 
-  struct VertexOutput {
-    ${PBR_VARYINGS(defines, 'out')}
-    [[builtin(position)]] position : vec4<f32>;
-  };
+  ${PBR_VARYINGS(defines)}
 
   [[stage(vertex)]]
   fn main(input : VertexInputs) -> VertexOutput {
@@ -87,10 +87,7 @@ export function PBRVertexSource(defines) { return wgsl`
 }
 
 function PBRSurfaceInfo(defines) { return wgsl`
-  struct FragmentInput {
-    [[builtin(frag_coord)]] fragCoord : vec4<f32>;
-    ${PBR_VARYINGS(defines)}
-  };
+  ${PBR_VARYINGS(defines)}
 
   struct SurfaceInfo {
     baseColor : vec4<f32>;
@@ -104,7 +101,7 @@ function PBRSurfaceInfo(defines) { return wgsl`
     v : vec3<f32>;
   };
 
-  fn GetSurfaceInfo(input : FragmentInput) -> SurfaceInfo {
+  fn GetSurfaceInfo(input : VertexOutput) -> SurfaceInfo {
     var surface : SurfaceInfo;
     surface.v = normalize(input.view);
 
@@ -249,13 +246,13 @@ export function PBRClusteredFragmentSource(defines) { return `
   ${PBRFunctions}
 
   [[stage(fragment)]]
-  fn main(input : FragmentInput) -> [[location(0)]] vec4<f32> {
+  fn main(input : VertexOutput) -> [[location(0)]] vec4<f32> {
     let surface : SurfaceInfo = GetSurfaceInfo(input);
 
     // reflectance equation
     var Lo : vec3<f32> = vec3<f32>(0.0, 0.0, 0.0);
 
-    let clusterIndex : u32 = getClusterIndex(input.fragCoord);
+    let clusterIndex : u32 = getClusterIndex(input.position);
     let lightCount : u32 = clusterLights.lights[clusterIndex].count;
 
     for (var lightIndex : u32 = 0u; lightIndex < lightCount; lightIndex = lightIndex + 1u) {

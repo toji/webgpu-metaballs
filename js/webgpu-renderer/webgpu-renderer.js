@@ -311,7 +311,7 @@ export class WebGPURenderer extends Renderer {
       format: this.swapChainFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
-    this.colorAttachment.attachment = msaaColorTexture.createView();
+    this.colorAttachment.view = msaaColorTexture.createView();
 
     const depthTexture = this.device.createTexture({
       size: { width, height },
@@ -319,7 +319,7 @@ export class WebGPURenderer extends Renderer {
       format: DEPTH_FORMAT,
       usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
-    this.depthAttachment.attachment = depthTexture.createView();
+    this.depthAttachment.view = depthTexture.createView();
 
     // On every size change we need to re-compute the cluster grid.
     this.computeClusterBounds();
@@ -514,7 +514,7 @@ export class WebGPURenderer extends Renderer {
             clusterStorageBindGroupLayout, // set 1
           ]
         }),
-        computeStage: {
+        compute: {
           module: this.device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
           entryPoint: 'main',
         }
@@ -571,7 +571,7 @@ export class WebGPURenderer extends Renderer {
 
       this.clusterLightsPipeline = this.device.createComputePipeline({
         layout: clusterLightsPipelineLayout,
-        computeStage: {
+        compute: {
           module: this.device.createShaderModule({ code: ClusterLightsSource, label: "Cluster Lights" }),
           entryPoint: 'main',
         }

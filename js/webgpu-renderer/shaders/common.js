@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import { wgsl } from '../wgsl-debug-helper.js';
+
 export const ATTRIB_MAP = {
   POSITION: 1,
   NORMAL: 2,
@@ -96,8 +98,8 @@ export const MaterialUniforms = `
 `;
 
 const APPROXIMATE_SRGB = false;
-export const ColorConversions = APPROXIMATE_SRGB ?
-`
+export const ColorConversions = wgsl`
+#if ${APPROXIMATE_SRGB}
   // linear <-> sRGB approximations
   // see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
   let GAMMA : f32 = 2.2;
@@ -109,9 +111,7 @@ export const ColorConversions = APPROXIMATE_SRGB ?
   fn sRGBToLinear(srgb : vec3<f32>) -> vec3<f32> {
     return pow(srgb, vec3<f32>(GAMMA, GAMMA, GAMMA));
   }
-`
-:
-`
+#else
   // linear <-> sRGB conversions
   fn linearTosRGB(linear : vec3<f32>) -> vec3<f32> {
     if (all(linear <= vec3<f32>(0.0031308, 0.0031308, 0.0031308))) {
@@ -126,6 +126,7 @@ export const ColorConversions = APPROXIMATE_SRGB ?
     }
     return pow((srgb + vec3<f32>(0.055, 0.055, 0.055)) / vec3<f32>(1.055, 1.055, 1.055), vec3<f32>(2.4, 2.4, 2.4));
   }
+#endif
 `;
 
 export const SimpleVertexSource = `
