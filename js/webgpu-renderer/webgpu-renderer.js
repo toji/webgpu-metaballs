@@ -263,14 +263,14 @@ export class WebGPURenderer extends Renderer {
       vertex: {
         module: this.device.createShaderModule({
           code: LightSpriteVertexSource,
-          label: 'Light Sprite'
+          label: 'Light Sprite Vertex'
         }),
         entryPoint: 'vertexMain'
       },
       fragment: {
         module: this.device.createShaderModule({
           code: LightSpriteFragmentSource,
-          label: 'Light Sprite'
+          label: 'Light Sprite Fragment'
         }),
         entryPoint: 'fragmentMain',
         targets: [{
