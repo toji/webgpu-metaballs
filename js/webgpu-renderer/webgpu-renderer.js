@@ -24,14 +24,10 @@ import './wgsl-debug-helper.js';
 import { Renderer } from '../renderer.js';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP } from './shaders/common.js';
 import { PBRRenderBundleHelper } from './pbr-render-bundle-helper.js';
-import { LightSpriteVertexSource, LightSpriteFragmentSource } from './shaders/light-sprite.js';
 import { vec2, vec3, vec4 } from 'gl-matrix';
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
-
-import { ClusterBoundsSource, ClusterLightsSource, TILE_COUNT, TOTAL_TILES, CLUSTER_LIGHTS_SIZE } from './shaders/clustered-compute.js';
-
-const SAMPLE_COUNT = 4;
-const DEPTH_FORMAT = "depth24plus";
+import { ClusteredLightManager } from './clustered-lights.js';
+import { WebGPULightSprites } from './webgpu-light-sprites.js';
 
 // Can reuse these for every PBR material
 const materialUniforms = new Float32Array(4 + 4 + 4);
@@ -39,9 +35,15 @@ const baseColorFactor = new Float32Array(materialUniforms.buffer, 0, 4);
 const metallicRoughnessFactor = new Float32Array(materialUniforms.buffer, 4 * 4, 2);
 const emissiveFactor = new Float32Array(materialUniforms.buffer, 8 * 4, 3);
 
+const SAMPLE_COUNT = 4;
+const DEPTH_FORMAT = "depth24plus";
+
 export class WebGPURenderer extends Renderer {
   constructor() {
     super();
+
+    this.sampleCount = SAMPLE_COUNT;
+    this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('gpupresent');
 
@@ -182,15 +184,6 @@ export class WebGPURenderer extends Renderer {
           buffer: {}
         }]
       }),
-
-      cluster: this.device.createBindGroupLayout({
-        label: `cluster-bgl`,
-        entries: [{
-          binding: 0,
-          visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
-          buffer: { type: 'read-only-storage' }
-        }]
-      }),
     };
 
     this.pipelineLayout = this.device.createPipelineLayout({
@@ -216,10 +209,7 @@ export class WebGPURenderer extends Renderer {
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
     });
 
-    this.clusterLightsBuffer = this.device.createBuffer({
-      size: CLUSTER_LIGHTS_SIZE * TOTAL_TILES,
-      usage: GPUBufferUsage.STORAGE
-    });
+    this.clusteredLights = new ClusteredLightManager(this);
 
     this.bindGroups = {
       frame: this.device.createBindGroup({
@@ -242,7 +232,7 @@ export class WebGPURenderer extends Renderer {
         }, {
           binding: 3,
           resource: {
-            buffer: this.clusterLightsBuffer
+            buffer: this.clusteredLights.clusterLightsBuffer,
           }
         }],
       })
@@ -252,54 +242,7 @@ export class WebGPURenderer extends Renderer {
     this.whiteTextureView = this.textureLoader.fromColor(1.0, 1.0, 1.0, 1.0).texture.createView();
     this.blueTextureView = this.textureLoader.fromColor(0, 0, 1.0, 0).texture.createView();
 
-    // Setup a render pipeline for drawing the light sprites
-    this.lightSpritePipeline = this.device.createRenderPipeline({
-      label: `light-sprite-pipeline`,
-      layout: this.device.createPipelineLayout({
-        bindGroupLayouts: [
-          this.bindGroupLayouts.frame, // set 0
-        ]
-      }),
-      vertex: {
-        module: this.device.createShaderModule({
-          code: LightSpriteVertexSource,
-          label: 'Light Sprite Vertex'
-        }),
-        entryPoint: 'vertexMain'
-      },
-      fragment: {
-        module: this.device.createShaderModule({
-          code: LightSpriteFragmentSource,
-          label: 'Light Sprite Fragment'
-        }),
-        entryPoint: 'fragmentMain',
-        targets: [{
-          format: this.swapChainFormat,
-          blend: {
-            color: {
-              srcFactor: 'src-alpha',
-              dstFactor: 'one',
-            },
-            alpha: {
-              srcFactor: "one",
-              dstFactor: "one",
-            },
-          },
-        }],
-      },
-      primitive: {
-        topology: 'triangle-strip',
-        stripIndexFormat: 'uint32'
-      },
-      depthStencil: {
-        depthWriteEnabled: false,
-        depthCompare: 'less',
-        format: DEPTH_FORMAT,
-      },
-      multisample: {
-        count: SAMPLE_COUNT,
-      }
-    });
+    this.lightSprites = new WebGPULightSprites(this);
   }
 
   onResize(width, height) {
@@ -321,8 +264,11 @@ export class WebGPURenderer extends Renderer {
     });
     this.depthAttachment.view = depthTexture.createView();
 
+    // Update the Projection uniforms. These only need to be updated on resize.
+    this.device.queue.writeBuffer(this.projectionBuffer, 0, this.frameUniforms.buffer, 0, ProjectionUniformsSize);
+
     // On every size change we need to re-compute the cluster grid.
-    this.computeClusterBounds();
+    this.clusteredLights.updateClusterBounds();
   }
 
   async setGltf(gltf) {
@@ -497,97 +443,6 @@ export class WebGPURenderer extends Renderer {
     }
   }
 
-  computeClusterBounds() {
-    if (!this.clusterPipeline) {
-      const clusterStorageBindGroupLayout = this.device.createBindGroupLayout({
-        entries: [{
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'storage' }
-        }]
-      });
-
-      this.clusterPipeline = this.device.createComputePipeline({
-        layout: this.device.createPipelineLayout({
-          bindGroupLayouts: [
-            this.bindGroupLayouts.frame, // set 0
-            clusterStorageBindGroupLayout, // set 1
-          ]
-        }),
-        compute: {
-          module: this.device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
-          entryPoint: 'main',
-        }
-      });
-
-      this.clusterBuffer = this.device.createBuffer({
-        size: TOTAL_TILES * 32, // Cluster x, y, z size * 32 bytes per cluster.
-        usage: GPUBufferUsage.STORAGE
-      });
-
-      this.clusterStorageBindGroup = this.device.createBindGroup({
-        layout: clusterStorageBindGroupLayout,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.clusterBuffer,
-          },
-        }],
-      });
-
-      this.bindGroups.cluster = this.device.createBindGroup({
-        layout: this.bindGroupLayouts.cluster,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.clusterBuffer,
-          },
-        }],
-      });
-    }
-
-    // Update the Projection uniforms. These only need to be updated on resize.
-    this.device.queue.writeBuffer(this.projectionBuffer, 0, this.frameUniforms.buffer, 0, ProjectionUniformsSize);
-
-    const commandEncoder = this.device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(this.clusterPipeline);
-    passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
-    passEncoder.setBindGroup(1, this.clusterStorageBindGroup);
-    passEncoder.dispatch(...TILE_COUNT);
-    passEncoder.endPass();
-    this.device.queue.submit([commandEncoder.finish()]);
-  }
-
-  computeClusterLights(commandEncoder) {
-    // On every size change we need to re-compute the cluster grid.
-    if (!this.clusterLightsPipeline) {
-      const clusterLightsPipelineLayout = this.device.createPipelineLayout({
-        bindGroupLayouts: [
-          this.bindGroupLayouts.frame, // set 0
-          this.bindGroupLayouts.cluster, // set 1
-        ]
-      });
-
-      this.clusterLightsPipeline = this.device.createComputePipeline({
-        layout: clusterLightsPipelineLayout,
-        compute: {
-          module: this.device.createShaderModule({ code: ClusterLightsSource, label: "Cluster Lights" }),
-          entryPoint: 'main',
-        }
-      });
-    }
-
-    // Update the FrameUniforms buffer with the values that are used by every
-    // program and don't change for the duration of the frame.
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(this.clusterLightsPipeline);
-    passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
-    passEncoder.setBindGroup(1, this.bindGroups.cluster);
-    passEncoder.dispatch(...TILE_COUNT);
-    passEncoder.endPass();
-  }
-
   onFrame(timestamp) {
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
@@ -609,7 +464,7 @@ export class WebGPURenderer extends Renderer {
     }
 
     const commandEncoder = this.device.createCommandEncoder({});
-    this.computeClusterLights(commandEncoder);
+    this.clusteredLights.updateClusterLights(commandEncoder);
 
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
@@ -620,9 +475,7 @@ export class WebGPURenderer extends Renderer {
     if (this.lightManager.render) {
       // Last, render a sprite for all of the lights. This is done using instancing so it's a single
       // call for every light.
-      passEncoder.setPipeline(this.lightSpritePipeline);
-      passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
-      passEncoder.draw(4, this.lightManager.lightCount, 0, 0);
+      this.lightSprites.draw(passEncoder);
     }
 
     passEncoder.endPass();
