@@ -117,57 +117,7 @@ export class Renderer {
     this.lightManager = new LightManager(1024);
 
     // Ambient color
-    //vec3.set(this.lightManager.ambientColor, 0.002, 0.002, 0.002);
-
-    // The first four lights will be fixed in each corner over the birdbath things.
-    // Because otherwise the roaming lights rarely make it to the corners and it gets really dark.
-    /*let light = this.lightManager.lights[0];
-    vec3.set(light.position, 8.95, 1, -3.55);
-    vec3.set(light.color, 5, 1, 1);
-    light.range = 4.0;
-
-    light = this.lightManager.lights[1];
-    vec3.set(light.position, 8.95, 1, 3.2);
-    vec3.set(light.color, 5, 1, 1);
-    light.range = 4.0;
-
-    light = this.lightManager.lights[2];
-    vec3.set(light.position, -9.65, 1, -3.55);
-    vec3.set(light.color, 1, 1, 5);
-    light.range = 4.0;
-
-    light = this.lightManager.lights[3];
-    vec3.set(light.position, -9.65, 1, 3.2);
-    vec3.set(light.color, 1, 1, 5);
-    light.range = 4.0;
-
-    // Ensure that the first wandering light is large and bright
-    light = this.lightManager.lights[4];
-    vec3.set(light.position, 0, 1.5, 0);
-    vec3.set(light.color, 5, 5, 5);
-    light.range = 5.0;
-
-    // Initialize positions and colors for all the lights
-    for (let i = 5; i < this.lightManager.maxLightCount; ++i) {
-      light = this.lightManager.lights[i];
-      light.static = false;
-
-      // Sponza scene approximate bounds:
-      // X [-11, 10]
-      // Y [0.2, 6.5]
-      // Z [-4.5, 4.0]
-      light.position[0] = randomBetween(-11, 10);
-      light.position[1] = randomBetween(0.2, 6.5);
-      light.position[2] = randomBetween(-4.5, 4.0);
-
-      light.range = 2;
-
-      vec3.set(light.color,
-        randomBetween(0.1, 1),
-        randomBetween(0.1, 1),
-        randomBetween(0.1, 1)
-      );
-    }*/
+    //vec3.set(this.lightManager.ambientColor, 0.02, 0.02, 0.02);
 
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
@@ -224,12 +174,36 @@ export class Renderer {
       if (gltfLight.type == "point") {
         const light = this.lightManager.lights[i];
         light.static = true;
-        light.range = gltfLight.range;
+        light.range = 4.5; //gltfLight.range;
         light.intensity = gltfLight.intensity;
         vec3.copy(light.color, gltfLight.color);
         vec3.copy(light.position, gltfLight.position);
       }
     }
+
+    // Initialize positions and colors for all the lights
+    /*for (let i = 0; i < this.lightManager.maxLightCount; ++i) {
+      let light = this.lightManager.lights[i];
+      light.static = false;
+
+      // Sponza scene approximate bounds:
+      // X [-11, 10]
+      // Y [0.2, 6.5]
+      // Z [-4.5, 4.0]
+      light.position[0] = randomBetween(-11, 10);
+      light.position[1] = randomBetween(0.2, 6.5);
+      light.position[2] = randomBetween(-4.5, 4.0);
+
+      light.range = 2;
+
+      vec3.set(light.color,
+        randomBetween(0.1, 1),
+        randomBetween(0.1, 1),
+        randomBetween(0.1, 1)
+      );
+    }*/
+
+    this.lightManager.lightCount = gltf.lights.length;
   }
 
   setViewMatrix(viewMatrix) {
@@ -245,7 +219,7 @@ export class Renderer {
   }
 
   updateLightRange(lightRange) {
-    for (let i = 5; i < this.lightManager.maxLightCount; ++i) {
+    for (let i = 0; i < this.lightManager.lightCount; ++i) {
       const light = this.lightManager.lights[i];
       if (light.static) continue;
 

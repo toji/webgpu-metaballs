@@ -43,7 +43,41 @@ export class ClusteredLightManager {
       usage: GPUBufferUsage.STORAGE
     });
 
-    this.clusterBoundsReadOnlyBindGroupLayout = device.createBindGroupLayout({
+    // Cluster Bounds computation resources
+    const clusterStorageBindGroupLayout = device.createBindGroupLayout({
+      label: `Cluster Storage Bind Group Layout`,
+      entries: [{
+        binding: 0,
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' }
+      }]
+    });
+
+    this.clusterBoundsPipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [
+          this.renderer.bindGroupLayouts.frame, // set 0
+          clusterStorageBindGroupLayout, // set 1
+        ]
+      }),
+      compute: {
+        module: device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
+        entryPoint: 'main',
+      }
+    });
+
+    this.clusterStorageBindGroup = device.createBindGroup({
+      layout: clusterStorageBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: {
+          buffer: this.clusterBoundsBuffer,
+        },
+      }],
+    });
+
+    // Cluster Lights computation resources
+    const clusterBoundsReadOnlyBindGroupLayout = device.createBindGroupLayout({
       label: `Cluster Bounds Bind Group Layout`,
       entries: [{
         binding: 0,
@@ -51,54 +85,33 @@ export class ClusteredLightManager {
         buffer: { type: 'read-only-storage' }
       }]
     });
+
+    this.clusterLightsPipeline = device.createComputePipeline({
+      layout: device.createPipelineLayout({
+        bindGroupLayouts: [
+          this.renderer.bindGroupLayouts.frame, // set 0
+          clusterBoundsReadOnlyBindGroupLayout, // set 1
+        ]
+      }),
+      compute: {
+        module: device.createShaderModule({ code: ClusterLightsSource, label: "Cluster Lights" }),
+        entryPoint: 'main',
+      }
+    });
+
+    this.clusterBoundsBindGroup = device.createBindGroup({
+      layout: clusterBoundsReadOnlyBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: {
+          buffer: this.clusterBoundsBuffer,
+        },
+      }],
+    });
   }
 
   updateClusterBounds(commandEncoder = null) {
     const device = this.renderer.device;
-
-    if (!this.clusterBoundsPipeline) {
-      const clusterStorageBindGroupLayout = device.createBindGroupLayout({
-        label: `Cluster Storage Bind Group Layout`,
-        entries: [{
-          binding: 0,
-          visibility: GPUShaderStage.COMPUTE,
-          buffer: { type: 'storage' }
-        }]
-      });
-
-      this.clusterBoundsPipeline = device.createComputePipeline({
-        layout: device.createPipelineLayout({
-          bindGroupLayouts: [
-            this.renderer.bindGroupLayouts.frame, // set 0
-            clusterStorageBindGroupLayout, // set 1
-          ]
-        }),
-        compute: {
-          module: device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
-          entryPoint: 'main',
-        }
-      });
-
-      this.clusterStorageBindGroup = device.createBindGroup({
-        layout: clusterStorageBindGroupLayout,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.clusterBoundsBuffer,
-          },
-        }],
-      });
-
-      this.clusterBoundsBindGroups = device.createBindGroup({
-        layout: this.clusterBoundsReadOnlyBindGroupLayout,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.clusterBoundsBuffer,
-          },
-        }],
-      });
-    }
 
     const externalCommandEncoder = !!commandEncoder;
     if (!externalCommandEncoder) {
@@ -119,23 +132,6 @@ export class ClusteredLightManager {
   updateClusterLights(commandEncoder = null) {
     const device = this.renderer.device;
 
-    if (!this.clusterLightsPipeline) {
-      const clusterLightsPipelineLayout = device.createPipelineLayout({
-        bindGroupLayouts: [
-          this.renderer.bindGroupLayouts.frame, // set 0
-          this.clusterBoundsReadOnlyBindGroupLayout, // set 1
-        ]
-      });
-
-      this.clusterLightsPipeline = device.createComputePipeline({
-        layout: clusterLightsPipelineLayout,
-        compute: {
-          module: device.createShaderModule({ code: ClusterLightsSource, label: "Cluster Lights" }),
-          entryPoint: 'main',
-        }
-      });
-    }
-
     const externalCommandEncoder = !!commandEncoder;
     if (!externalCommandEncoder) {
       commandEncoder = device.createCommandEncoder();
@@ -146,7 +142,7 @@ export class ClusteredLightManager {
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.clusterLightsPipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
-    passEncoder.setBindGroup(1, this.clusterBoundsBindGroups);
+    passEncoder.setBindGroup(1, this.clusterBoundsBindGroup);
     passEncoder.dispatch(...TILE_COUNT);
     passEncoder.endPass();
 
