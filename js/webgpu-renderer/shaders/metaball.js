@@ -28,15 +28,27 @@ export const MetaballVertexSource = `
     [[location(${ATTRIB_MAP.POSITION})]] position : vec3<f32>;
   };
 
+  struct VertexOutput {
+    [[location(0)]] worldPosition : vec3<f32>;
+    [[builtin(position)]] position : vec4<f32>;
+  };
+
   [[stage(vertex)]]
-  fn vertexMain(input : VertexInput) -> [[builtin(position)]] vec4<f32> {
-    return projection.matrix * view.matrix * vec4<f32>(input.position, 1.0);
+  fn vertexMain(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+    output.worldPosition = input.position;
+    output.position = projection.matrix * view.matrix * vec4<f32>(input.position, 1.0);
+    return output;
   }
 `;
 
 export const MetaballFragmentSource = `
+  struct VertexOutput {
+    [[location(0)]] worldPosition : vec3<f32>;
+  };
+
   [[stage(fragment)]]
-  fn fragmentMain() -> [[location(0)]] vec4<f32> {
-    return vec4<f32>(1.0, 0.2, 0.0, 1.0);
+  fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
+    return vec4<f32>(0.0, input.worldPosition.y, 0.0, 1.0);
   }
 `;

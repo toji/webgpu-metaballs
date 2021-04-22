@@ -332,14 +332,14 @@ function marchingCube(points, values, threshold, arrays) {
   // Determine the index into the edge table which tells us which vertices are
   // inside of the surface.
   let cubeIndex = 0;
-  if (values[0] > threshold) cubeIndex |= 1;
-  if (values[1] > threshold) cubeIndex |= 2;
-  if (values[2] > threshold) cubeIndex |= 4;
-  if (values[3] > threshold) cubeIndex |= 8;
-  if (values[4] > threshold) cubeIndex |= 16;
-  if (values[5] > threshold) cubeIndex |= 32;
-  if (values[6] > threshold) cubeIndex |= 64;
-  if (values[7] > threshold) cubeIndex |= 128;
+  if (values[0] < threshold) cubeIndex |= 1;
+  if (values[1] < threshold) cubeIndex |= 2;
+  if (values[2] < threshold) cubeIndex |= 4;
+  if (values[3] < threshold) cubeIndex |= 8;
+  if (values[4] < threshold) cubeIndex |= 16;
+  if (values[5] < threshold) cubeIndex |= 32;
+  if (values[6] < threshold) cubeIndex |= 64;
+  if (values[7] < threshold) cubeIndex |= 128;
 
   const edges = edgeTable[cubeIndex];
 
@@ -464,7 +464,7 @@ export class Isosurface {
     return (x + y + z) / 3.0;
   }
 
-  generateMesh(arrays, threshold = 0) {
+  generateMesh(arrays, threshold = 40) {
     if (!arrays.positions) {
       throw new Error('Must specify a positions array');
     }
@@ -482,8 +482,6 @@ export class Isosurface {
 
     const initialIndexOffset = arrays.indexOffset;
 
-    const maxVertices = Math.floor(arrays.positions.length / 3);
-
     const val = new Float32Array(8);
     const p0 = new Float32Array(3);
     const p1 = new Float32Array(3);
@@ -495,8 +493,6 @@ export class Isosurface {
     const p7 = new Float32Array(3);
 
     let pt = [ p0, p1, p2, p3, p4, p5, p6, p7 ];
-
-    let vertexCount = 0;
 
     // Iterate through the full volume and evaluate the isosurface at every
     // point, then generate the triangulated surface based on that.
