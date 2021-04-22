@@ -22,6 +22,7 @@ import { Isosurface } from './marching-cubes.js'
 import { vec3 } from 'gl-matrix';
 
 const TMP_VEC3 = vec3.create();
+const TMP_VEC3_2 = vec3.create();
 
 export class Metaballs extends Isosurface {
   constructor() {
@@ -108,5 +109,29 @@ export class Metaballs extends Isosurface {
       }
     }
     return result;
+  }
+
+  normalFunc(out, x, y, z) {
+    // No surfaces outside "the tube"
+    if(x*x + z*z > 1.1) {
+      vec3.set(out, 0, 0, 0);
+      return;
+    }
+
+    vec3.set(TMP_VEC3, x, y, z);
+
+    if (y <= 0.1) {
+      vec3.set(out, 0, 1, 0);
+    } else {
+      vec3.set(out, 0, 0, 0);
+    }
+    for (const ball of this.balls) {
+      if (vec3.dist(TMP_VEC3, ball.position) <= ball.radius) {
+        vec3.sub(TMP_VEC3_2, TMP_VEC3, ball.position);
+        vec3.normalize(TMP_VEC3_2, TMP_VEC3_2);
+        vec3.add(out, out, TMP_VEC3_2);
+      }
+    }
+    vec3.normalize(out, out);
   }
 }

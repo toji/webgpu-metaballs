@@ -7,6 +7,8 @@
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
 
+import { vec3 } from "gl-matrix";
+
 // The above copyright notice and this permission notice shall be included in
 // all copies or substantial portions of the Software.
 
@@ -317,110 +319,13 @@ const triTable = new Int8Array([
 ]);
 
 const indexList = new Uint16Array(12);
+const TMP_VEC3 = vec3.create();
 
 // Lifted from https://stackoverflow.com/questions/43122082/efficiently-count-the-number-of-bits-in-an-integer-in-javascript/43122214
 function bitCount (n) {
   n = n - ((n >> 1) & 0x55555555);
   n = (n & 0x33333333) + ((n >> 2) & 0x33333333);
   return ((n + (n >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
-}
-
-function marchingCube(points, values, threshold, arrays) {
-  let vertexOffset = arrays.vertexOffset;
-  const positions = arrays.positions;
-
-  // Determine the index into the edge table which tells us which vertices are
-  // inside of the surface.
-  let cubeIndex = 0;
-  if (values[0] < threshold) cubeIndex |= 1;
-  if (values[1] < threshold) cubeIndex |= 2;
-  if (values[2] < threshold) cubeIndex |= 4;
-  if (values[3] < threshold) cubeIndex |= 8;
-  if (values[4] < threshold) cubeIndex |= 16;
-  if (values[5] < threshold) cubeIndex |= 32;
-  if (values[6] < threshold) cubeIndex |= 64;
-  if (values[7] < threshold) cubeIndex |= 128;
-
-  const edges = edgeTable[cubeIndex];
-
-  // Cube is entirely in/out of the surface
-  if (edges === 0) {
-    return true;
-  }
-  const vertCount = bitCount(edges);
-  if ((vertCount * 3) + vertexOffset >= positions.length) {
-    return false;
-  }
-
-  // Generate vertices where the surface intersects the cube
-  if (edges & 1) {
-    interpolate(positions, vertexOffset*3, threshold, points[0], points[1], values[0], values[1]);
-    indexList[0] = vertexOffset++;
-  }
-  if (edges & 2) {
-    interpolate(positions, vertexOffset*3, threshold, points[1], points[2], values[1], values[2]);
-    indexList[1] = vertexOffset++;
-  }
-  if (edges & 4) {
-    interpolate(positions, vertexOffset*3, threshold, points[2], points[3], values[2], values[3]);
-    indexList[2] = vertexOffset++;
-  }
-  if (edges & 8) {
-    interpolate(positions, vertexOffset*3, threshold, points[3], points[0], values[3], values[0]);
-    indexList[3] = vertexOffset++;
-  }
-  if (edges & 16) {
-    interpolate(positions, vertexOffset*3, threshold, points[4], points[5], values[4], values[5]);
-    indexList[4] = vertexOffset++;
-  }
-  if (edges & 32) {
-    interpolate(positions, vertexOffset*3, threshold, points[5], points[6], values[5], values[6]);
-    indexList[5] = vertexOffset++;
-  }
-  if (edges & 64) {
-    interpolate(positions, vertexOffset*3, threshold, points[7], points[6], values[7], values[6]);
-    indexList[6] = vertexOffset++;
-  }
-  if (edges & 128) {
-    interpolate(positions, vertexOffset*3, threshold, points[7], points[4], values[7], values[4]);
-    indexList[7] = vertexOffset++;
-  }
-  if (edges & 256) {
-    interpolate(positions, vertexOffset*3, threshold, points[0], points[4], values[0], values[4]);
-    indexList[8] = vertexOffset++;
-  }
-  if (edges & 512) {
-    interpolate(positions, vertexOffset*3, threshold, points[1], points[5], values[1], values[5]);
-    indexList[9] = vertexOffset++;
-  }
-  if (edges & 1024) {
-    interpolate(positions, vertexOffset*3, threshold, points[2], points[6], values[2], values[6]);
-    indexList[10] = vertexOffset++;
-  }
-  if (edges & 2048) {
-    interpolate(positions, vertexOffset*3, threshold, points[3], points[7], values[3], values[7]);
-    indexList[11] = vertexOffset++;
-  }
-
-  arrays.vertexOffset = vertexOffset;
-
-  // Record the triangle indices
-  let triTableOffset = cubeIndex <<= 4;
-  while (triTable[triTableOffset] != -1 && (arrays.indexOffset + 3 < arrays.indices.length)) {
-    let i0 = triTable[triTableOffset++];
-    let i1 = triTable[triTableOffset++];
-    let i2 = triTable[triTableOffset++];
-    arrays.indices[arrays.indexOffset++] = indexList[i0];
-    arrays.indices[arrays.indexOffset++] = indexList[i1];
-    arrays.indices[arrays.indexOffset++] = indexList[i2];
-  }
-
-  if (arrays.indexOffset+3 >= arrays.indices.length) {
-    // Not enough space in the index arrays for any more triangles.
-    return false;
-  }
-
-  return true;
 }
 
 function interpolate(out, offset, threshold, p1, p2, valp1, valp2) {
@@ -462,6 +367,11 @@ export class Isosurface {
   surfaceFunc(x, y, z) {
     // Just a dummy function
     return (x + y + z) / 3.0;
+  }
+
+  normalFunc(out, x, y, z) {
+    vec3.set(out, x, y, z);
+    vec3.normalize(out, out);
   }
 
   generateMesh(arrays, threshold = 40) {
@@ -555,7 +465,7 @@ export class Isosurface {
           val[6] = this.surfaceFunc(p6[0], p6[1], p6[2]);
           val[7] = this.surfaceFunc(p7[0], p7[1], p7[2]);
 
-          if (!marchingCube(pt, val, threshold, arrays)) {
+          if (!this.marchingCube(pt, val, threshold, arrays)) {
             // If we hit this then our output arrays have run out of room and we'll simply have to
             // abort mid-triangulation. At least you'll get a partially computed surface out of it!
             return arrays.indexOffset - initialIndexOffset;
@@ -564,5 +474,127 @@ export class Isosurface {
       }
     }
     return arrays.indexOffset - initialIndexOffset;
+  }
+
+  getNormal(positions, normals, offset) {
+    if (!normals) return;
+    this.normalFunc(TMP_VEC3,
+      positions[offset],
+      positions[offset+1],
+      positions[offset+2]);
+    normals[offset] = TMP_VEC3[0];
+    normals[offset+1] = TMP_VEC3[1];
+    normals[offset+2] = TMP_VEC3[2];
+  }
+
+  marchingCube(points, values, threshold, arrays) {
+    let vertexOffset = arrays.vertexOffset;
+    const positions = arrays.positions;
+    const normals = arrays.normals;
+  
+    // Determine the index into the edge table which tells us which vertices are
+    // inside of the surface.
+    let cubeIndex = 0;
+    if (values[0] < threshold) cubeIndex |= 1;
+    if (values[1] < threshold) cubeIndex |= 2;
+    if (values[2] < threshold) cubeIndex |= 4;
+    if (values[3] < threshold) cubeIndex |= 8;
+    if (values[4] < threshold) cubeIndex |= 16;
+    if (values[5] < threshold) cubeIndex |= 32;
+    if (values[6] < threshold) cubeIndex |= 64;
+    if (values[7] < threshold) cubeIndex |= 128;
+  
+    const edges = edgeTable[cubeIndex];
+  
+    // Cube is entirely in/out of the surface
+    if (edges === 0) {
+      return true;
+    }
+    const vertCount = bitCount(edges);
+    if ((vertCount * 3) + vertexOffset >= positions.length) {
+      return false;
+    }
+  
+    // Generate vertices where the surface intersects the cube
+    if (edges & 1) {
+      interpolate(positions, vertexOffset*3, threshold, points[0], points[1], values[0], values[1]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[0] = vertexOffset++;
+    }
+    if (edges & 2) {
+      interpolate(positions, vertexOffset*3, threshold, points[1], points[2], values[1], values[2]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[1] = vertexOffset++;
+    }
+    if (edges & 4) {
+      interpolate(positions, vertexOffset*3, threshold, points[2], points[3], values[2], values[3]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[2] = vertexOffset++;
+    }
+    if (edges & 8) {
+      interpolate(positions, vertexOffset*3, threshold, points[3], points[0], values[3], values[0]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[3] = vertexOffset++;
+    }
+    if (edges & 16) {
+      interpolate(positions, vertexOffset*3, threshold, points[4], points[5], values[4], values[5]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[4] = vertexOffset++;
+    }
+    if (edges & 32) {
+      interpolate(positions, vertexOffset*3, threshold, points[5], points[6], values[5], values[6]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[5] = vertexOffset++;
+    }
+    if (edges & 64) {
+      interpolate(positions, vertexOffset*3, threshold, points[7], points[6], values[7], values[6]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[6] = vertexOffset++;
+    }
+    if (edges & 128) {
+      interpolate(positions, vertexOffset*3, threshold, points[7], points[4], values[7], values[4]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[7] = vertexOffset++;
+    }
+    if (edges & 256) {
+      interpolate(positions, vertexOffset*3, threshold, points[0], points[4], values[0], values[4]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[8] = vertexOffset++;
+    }
+    if (edges & 512) {
+      interpolate(positions, vertexOffset*3, threshold, points[1], points[5], values[1], values[5]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[9] = vertexOffset++;
+    }
+    if (edges & 1024) {
+      interpolate(positions, vertexOffset*3, threshold, points[2], points[6], values[2], values[6]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[10] = vertexOffset++;
+    }
+    if (edges & 2048) {
+      interpolate(positions, vertexOffset*3, threshold, points[3], points[7], values[3], values[7]);
+      this.getNormal(positions, normals, vertexOffset*3);
+      indexList[11] = vertexOffset++;
+    }
+  
+    arrays.vertexOffset = vertexOffset;
+  
+    // Record the triangle indices
+    let triTableOffset = cubeIndex <<= 4;
+    while (triTable[triTableOffset] != -1 && (arrays.indexOffset + 3 < arrays.indices.length)) {
+      let i0 = triTable[triTableOffset++];
+      let i1 = triTable[triTableOffset++];
+      let i2 = triTable[triTableOffset++];
+      arrays.indices[arrays.indexOffset++] = indexList[i0];
+      arrays.indices[arrays.indexOffset++] = indexList[i1];
+      arrays.indices[arrays.indexOffset++] = indexList[i2];
+    }
+  
+    if (arrays.indexOffset+3 >= arrays.indices.length) {
+      // Not enough space in the index arrays for any more triangles.
+      return false;
+    }
+  
+    return true;
   }
 }

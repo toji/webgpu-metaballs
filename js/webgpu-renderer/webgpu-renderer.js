@@ -450,6 +450,11 @@ export class WebGPURenderer extends Renderer {
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
       });
 
+      this.metaballsNormalBuffer = this.device.createBuffer({
+        size: METABALLS_VERTEX_BUFFER_SIZE,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+      });
+
       this.metaballsIndexBuffer = this.device.createBuffer({
         size: METABALLS_INDEX_BUFFER_SIZE,
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
@@ -470,7 +475,14 @@ export class WebGPURenderer extends Renderer {
               shaderLocation: ATTRIB_MAP.POSITION,
               format: 'float32x3',
               offset: 0
-            }]
+            }],
+          }, {
+            arrayStride: 12,
+            attributes: [{
+              shaderLocation: ATTRIB_MAP.NORMAL,
+              format: 'float32x3',
+              offset: 0
+            }],
           }]
         },
         fragment: {
@@ -501,6 +513,12 @@ export class WebGPURenderer extends Renderer {
       mappedAtCreation: true,
     });
 
+    this.metaballsNormalCopyBuffer = this.device.createBuffer({
+      size: METABALLS_VERTEX_BUFFER_SIZE,
+      usage: GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: true,
+    });
+
     this.metaballsIndexCopyBuffer = this.device.createBuffer({
       size: METABALLS_INDEX_BUFFER_SIZE,
       usage: GPUBufferUsage.COPY_SRC,
@@ -509,6 +527,7 @@ export class WebGPURenderer extends Renderer {
 
     const arrays = {
       positions: new Float32Array(this.metaballsVertexCopyBuffer.getMappedRange()),
+      normals: new Float32Array(this.metaballsNormalCopyBuffer.getMappedRange()),
       indices: new Uint16Array(this.metaballsIndexCopyBuffer.getMappedRange()),
       vertexOffset: 0,
       indexOffset: 0,
@@ -517,10 +536,12 @@ export class WebGPURenderer extends Renderer {
     this.metaballsIndexCount = this.metaballs.generateMesh(arrays);
 
     this.metaballsVertexCopyBuffer.unmap();
+    this.metaballsNormalCopyBuffer.unmap();
     this.metaballsIndexCopyBuffer.unmap();
 
     const commandEncoder = this.device.createCommandEncoder({});
     commandEncoder.copyBufferToBuffer(this.metaballsVertexCopyBuffer, 0, this.metaballsVertexBuffer, 0, METABALLS_VERTEX_BUFFER_SIZE);
+    commandEncoder.copyBufferToBuffer(this.metaballsNormalCopyBuffer, 0, this.metaballsNormalBuffer, 0, METABALLS_VERTEX_BUFFER_SIZE);
     commandEncoder.copyBufferToBuffer(this.metaballsIndexCopyBuffer, 0, this.metaballsIndexBuffer, 0, METABALLS_INDEX_BUFFER_SIZE);
     this.device.queue.submit([commandEncoder.finish()]);
 
@@ -561,6 +582,7 @@ export class WebGPURenderer extends Renderer {
       passEncoder.setPipeline(this.metaballsPipeline);
       passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
       passEncoder.setVertexBuffer(0, this.metaballsVertexBuffer);
+      passEncoder.setVertexBuffer(1, this.metaballsNormalBuffer);
       passEncoder.setIndexBuffer(this.metaballsIndexBuffer, 'uint16');
       passEncoder.drawIndexed(this.metaballsIndexCount, 1, 0, 0, 0);
     }
