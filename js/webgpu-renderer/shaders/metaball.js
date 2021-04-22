@@ -49,6 +49,6 @@ export const MetaballFragmentSource = `
 
   [[stage(fragment)]]
   fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
-    return vec4<f32>(0.0, input.worldPosition.y, 0.0, 1.0);
+    return vec4<f32>((2.5 - input.worldPosition.y) / 1.0, input.worldPosition.y / 10.0, 0.0, 1.0);
   }
 `;

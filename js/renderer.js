@@ -282,6 +282,21 @@ export class Renderer {
     // Override with renderer-specific mesh upload logic, but be sure to call
     // super.updateMetaballs so that the animation logic can be processed.
     this.metaballs.updateBalls(timestamp);
+
+    // Attach a light to each ball
+    let lightIndex = 4;
+    for (const ball of this.metaballs.balls) {
+      let light = this.lightManager.lights[lightIndex];
+      light.static = true;
+
+      vec3.set(light.color, 0.8, 0.2, 0.0);
+      light.intensity = 5;
+      vec3.copy(light.position, ball.position);
+
+      lightIndex++;
+    }
+
+    this.lightManager.lightCount = lightIndex;
   }
 
   // Handles frame logic that's common to all renderers.
