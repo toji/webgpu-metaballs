@@ -39,6 +39,8 @@ class Light {
     this.static = true;
 
     this._range = -1;
+    this._intensity = 1;
+    this._enabled = true;
   }
 
   get range() {
@@ -51,11 +53,12 @@ class Light {
   }
 
   get intensity() {
-    return this.intensityArray[0];
+    return this._intensity;
   }
 
   set intensity(value) {
-    this.intensityArray[0] = value;
+    this._intensity = value;
+    this.intensityArray[0] = this._enabled ? this._intensity : 0;
     this.rangeArray[0] = this._range >= 0 ? this._range : this.computedRange;
   }
 
@@ -63,6 +66,15 @@ class Light {
     const lightRadius = 0.05;
     const illuminationThreshold = 0.001;
     return lightRadius * (Math.sqrt(this.intensityArray[0]/illuminationThreshold) - 1);
+  }
+
+  set enabled(value) {
+    this._enabled = !!value;
+    this.intensityArray[0] = this._enabled ? this._intensity : 0;
+  }
+
+  get enabled() {
+    return this._enabled;
   }
 }
 
@@ -123,6 +135,7 @@ export class Renderer {
 
     // Allocate all the scene's lights
     this.lightManager = new LightManager(1024);
+    this.sceneLightCount = 0;
 
     // Ambient color
     //vec3.set(this.lightManager.ambientColor, 0.02, 0.02, 0.02);
@@ -191,6 +204,9 @@ export class Renderer {
       }
     }
 
+    this.sceneLightCount = gltf.lights.length;
+    this.lightManager.lightCount = gltf.lights.length;
+
     // Initialize positions and colors for all the lights
     /*for (let i = 0; i < this.lightManager.maxLightCount; ++i) {
       let light = this.lightManager.lights[i];
@@ -212,8 +228,6 @@ export class Renderer {
         randomBetween(0.1, 1)
       );
     }*/
-
-    this.lightManager.lightCount = gltf.lights.length;
   }
 
   setViewMatrix(viewMatrix) {
@@ -284,7 +298,7 @@ export class Renderer {
     this.metaballs.updateBalls(timestamp);
 
     // Attach a light to each ball
-    let lightIndex = 4;
+    let lightIndex = this.sceneLightCount;
     for (const ball of this.metaballs.balls) {
       let light = this.lightManager.lights[lightIndex];
       light.static = true;
@@ -297,6 +311,17 @@ export class Renderer {
     }
 
     this.lightManager.lightCount = lightIndex;
+  }
+
+  enableLights(enableSceneLights, enabledMetaballLights) {
+    let i = 0;
+    for (; i < this.sceneLightCount; ++i) {
+      this.lightManager.lights[i].enabled = enableSceneLights;
+    }
+
+    for (; i < this.lightManager.lightCount; ++i) {
+      this.lightManager.lights[i].enabled = enabledMetaballLights;
+    }
   }
 
   // Handles frame logic that's common to all renderers.

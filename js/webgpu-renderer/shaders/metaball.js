@@ -43,12 +43,15 @@ export const MetaballVertexSource = `
 `;
 
 export const MetaballFragmentSource = `
+  ${ColorConversions}
+
   struct VertexOutput {
     [[location(0)]] worldPosition : vec3<f32>;
   };
 
   [[stage(fragment)]]
   fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
-    return vec4<f32>((2.5 - input.worldPosition.y) / 1.0, input.worldPosition.y / 10.0, 0.0, 1.0);
+    let color : vec3<f32> = linearTosRGB(vec3<f32>((2.5 - input.worldPosition.y) / 2.0, 0.0, 0.0));
+    return vec4<f32>(color, 1.0);
   }
 `;

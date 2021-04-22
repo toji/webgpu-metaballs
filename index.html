@@ -73,8 +73,8 @@
         output: 'clustered-forward',
         mesh: './media/models/dungeon/dungeon.glb',
         renderLightSprites: true,
-        lightCount: 128,
-        maxLightRange: 2,
+        enableSceneLights: true,
+        enableMetaballLights: true,
       };
 
       let gui = new dat.GUI();
@@ -86,6 +86,18 @@
       gui.add(appSettings, 'renderLightSprites').onChange(() => {
         if (renderer) {
           renderer.lightManager.render = appSettings.renderLightSprites;
+        }
+      });
+
+      gui.add(appSettings, 'enableSceneLights').onChange(() => {
+        if (renderer) {
+          renderer.enableLights(appSettings.enableSceneLights, appSettings.enableMetaballLights);
+        }
+      });
+
+      gui.add(appSettings, 'enableMetaballLights').onChange(() => {
+        if (renderer) {
+          renderer.enableLights(appSettings.enableSceneLights, appSettings.enableMetaballLights);
         }
       });
 
