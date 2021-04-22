@@ -235,6 +235,8 @@ export class WebGPURenderer extends Renderer {
     this.blueTextureView = this.textureLoader.fromColor(0, 0, 1.0, 0).texture.createView();
 
     this.lightSprites = new WebGPULightSprites(this);
+
+    this.lavaTexture = await this.textureLoader.fromUrl('./media/textures/lava.jpg', {colorSpace: 'sRGB'});
   }
 
   onResize(width, height) {
@@ -460,10 +462,42 @@ export class WebGPURenderer extends Renderer {
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
       });
 
+      const lavaBindGroupLayout = this.device.createBindGroupLayout({
+        label: `lava-bgl`,
+        entries: [{
+          binding: 0, // sampler
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: {}
+        },
+        {
+          binding: 1, // texture
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: {}
+        }]
+      });
+
+      this.bindGroups.lava = this.device.createBindGroup({
+        layout: lavaBindGroupLayout,
+        entries: [{
+          binding: 0,
+          resource: this.device.createSampler({
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            magFilter: 'linear',
+            minFilter: 'linear',
+            mipmapFilter: 'linear',
+          }),
+        }, {
+          binding: 1,
+          resource: this.lavaTexture.texture.createView(),
+        }],
+      });
+
       this.metaballsPipeline = this.device.createRenderPipeline({
         layout: this.device.createPipelineLayout({
           bindGroupLayouts: [
-            this.bindGroupLayouts.frame
+            this.bindGroupLayouts.frame,
+            lavaBindGroupLayout
           ]
         }),
         vertex: {
@@ -581,6 +615,7 @@ export class WebGPURenderer extends Renderer {
     if (this.metaballsPipeline) {
       passEncoder.setPipeline(this.metaballsPipeline);
       passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
+      passEncoder.setBindGroup(1, this.bindGroups.lava);
       passEncoder.setVertexBuffer(0, this.metaballsVertexBuffer);
       passEncoder.setVertexBuffer(1, this.metaballsNormalBuffer);
       passEncoder.setIndexBuffer(this.metaballsIndexBuffer, 'uint16');

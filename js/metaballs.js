@@ -122,9 +122,10 @@ export class Metaballs extends Isosurface {
 
     if (y <= 0.1) {
       vec3.set(out, 0, 1, 0);
-    } else {
-      vec3.set(out, 0, 0, 0);
+      return;
     }
+    
+    vec3.set(out, 0, 0, 0);
     for (const ball of this.balls) {
       if (vec3.dist(TMP_VEC3, ball.position) <= ball.radius) {
         vec3.sub(TMP_VEC3_2, TMP_VEC3, ball.position);

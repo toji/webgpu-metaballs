@@ -132,6 +132,7 @@ export class Renderer {
 
     this.viewMatrix = new Float32Array(this.frameUniforms.buffer, 36 * 4, 16);
     this.cameraPosition = new Float32Array(this.frameUniforms.buffer, 52 * 4, 3);
+    this.timeArray = new Float32Array(this.frameUniforms.buffer, 55 * 4, 1);
 
     // Allocate all the scene's lights
     this.lightManager = new LightManager(1024);
@@ -303,8 +304,8 @@ export class Renderer {
       let light = this.lightManager.lights[lightIndex];
       light.static = true;
 
-      vec3.set(light.color, 0.8, 0.2, 0.0);
-      light.intensity = 5;
+      vec3.set(light.color, 0.9, 0.1, 0.0);
+      light.intensity = 6;
       vec3.copy(light.position, ball.position);
 
       lightIndex++;
@@ -329,6 +330,7 @@ export class Renderer {
     // Copy values from the camera into our frame uniform buffers
     mat4.copy(this.viewMatrix, this.camera.viewMatrix);
     vec3.copy(this.cameraPosition, this.camera.position);
+    this.timeArray[0] = timestamp;
 
     this.updateWanderingLights(timeDelta);
     this.updateMetaballs(timestamp);

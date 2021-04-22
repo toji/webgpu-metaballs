@@ -51,6 +51,7 @@ export const ViewUniforms = `
   [[block]] struct ViewUniforms {
     matrix : mat4x4<f32>;
     position : vec3<f32>;
+    time : f32;
   };
   [[group(${BIND_GROUP.Frame}), binding(1)]] var<uniform> view : ViewUniforms;
 `;
