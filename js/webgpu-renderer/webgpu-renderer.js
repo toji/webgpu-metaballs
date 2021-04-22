@@ -22,12 +22,13 @@
 import './wgsl-debug-helper.js';
 
 import { Renderer } from '../renderer.js';
-import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP } from './shaders/common.js';
+import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { PBRRenderBundleHelper } from './pbr-render-bundle-helper.js';
 import { vec2, vec3, vec4 } from 'gl-matrix';
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
 import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
+import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball.js';
 
 // Can reuse these for every PBR material
 const materialUniforms = new Float32Array(4 + 4 + 4);
@@ -37,6 +38,9 @@ const emissiveFactor = new Float32Array(materialUniforms.buffer, 8 * 4, 3);
 
 const SAMPLE_COUNT = 4;
 const DEPTH_FORMAT = "depth24plus";
+
+const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
+const METABALLS_INDEX_BUFFER_SIZE = Uint16Array.BYTES_PER_ELEMENT * 16384;
 
 export class WebGPURenderer extends Renderer {
   constructor() {
@@ -78,18 +82,6 @@ export class WebGPURenderer extends Renderer {
       depthStencilFormat: DEPTH_FORMAT,
       sampleCount: SAMPLE_COUNT
     };
-
-    // Just for debugging my shader helper stuff. This is expected to fail.
-    /*this.device.createShaderModule({
-      label: 'Test Shader',
-      code: `
-        [[stage(vertex)]]
-        fn main([[location(0)]] inPosition : vec3<f32>) -> [[builtin(position)]] vec4 {
-          let a = 0;
-          return vec4<f32>(inPosition, 1.0);
-        }
-      `
-    });*/
 
     this.textureLoader = new WebGPUTextureLoader(this.device);
 
@@ -302,6 +294,8 @@ export class WebGPURenderer extends Renderer {
 
     this.outputRenderBundles = {};
     this.primitives = gltf.primitives;
+
+    this.updateMetaballs(0);
   }
 
   async initBufferView(bufferView) {
@@ -443,6 +437,97 @@ export class WebGPURenderer extends Renderer {
     }
   }
 
+  updateMetaballs(timestamp) {
+    super.updateMetaballs(timestamp);
+
+    if (!this.primitives) {
+      return;
+    }
+
+    if (!this.metaballsPipeline) {
+      this.metaballsVertexBuffer = this.device.createBuffer({
+        size: METABALLS_VERTEX_BUFFER_SIZE,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+      });
+
+      this.metaballsIndexBuffer = this.device.createBuffer({
+        size: METABALLS_INDEX_BUFFER_SIZE,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
+      });
+
+      this.metaballsPipeline = this.device.createRenderPipeline({
+        layout: this.device.createPipelineLayout({
+          bindGroupLayouts: [
+            this.bindGroupLayouts.frame
+          ]
+        }),
+        vertex: {
+          module: this.device.createShaderModule({ code: MetaballVertexSource }),
+          entryPoint: "vertexMain",
+          buffers: [{
+            arrayStride: 12,
+            attributes: [{
+              shaderLocation: ATTRIB_MAP.POSITION,
+              format: 'float32x3',
+              offset: 0
+            }]
+          }]
+        },
+        fragment: {
+          module: this.device.createShaderModule({ code: MetaballFragmentSource }),
+          entryPoint: "fragmentMain",
+          targets: [{
+            format: this.swapChainFormat,
+          }]
+        },
+        primitive: {
+          topology: 'triangle-list',
+          cullMode: 'none',
+        },
+        depthStencil: {
+          format: DEPTH_FORMAT,
+          depthWriteEnabled: true,
+          depthCompare: 'less',
+        },
+        multisample: {
+          count: SAMPLE_COUNT
+        }
+      });
+    }
+
+    this.metaballsVertexCopyBuffer = this.device.createBuffer({
+      size: METABALLS_VERTEX_BUFFER_SIZE,
+      usage: GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: true,
+    });
+
+    this.metaballsIndexCopyBuffer = this.device.createBuffer({
+      size: METABALLS_INDEX_BUFFER_SIZE,
+      usage: GPUBufferUsage.COPY_SRC,
+      mappedAtCreation: true,
+    });
+
+    const arrays = {
+      positions: new Float32Array(this.metaballsVertexCopyBuffer.getMappedRange()),
+      indices: new Uint16Array(this.metaballsIndexCopyBuffer.getMappedRange()),
+      vertexOffset: 0,
+      indexOffset: 0,
+    };
+
+    this.metaballsIndexCount = this.metaballs.generateMesh(arrays);
+
+    this.metaballsVertexCopyBuffer.unmap();
+    this.metaballsIndexCopyBuffer.unmap();
+
+    const commandEncoder = this.device.createCommandEncoder({});
+    commandEncoder.copyBufferToBuffer(this.metaballsVertexCopyBuffer, 0, this.metaballsVertexBuffer, 0, METABALLS_VERTEX_BUFFER_SIZE);
+    commandEncoder.copyBufferToBuffer(this.metaballsIndexCopyBuffer, 0, this.metaballsIndexBuffer, 0, METABALLS_INDEX_BUFFER_SIZE);
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    this.metaballsVertexCopyBuffer.destroy();
+    this.metaballsIndexCopyBuffer.destroy();
+  }
+
   onFrame(timestamp) {
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
@@ -470,6 +555,14 @@ export class WebGPURenderer extends Renderer {
 
     if (renderBundle) {
       passEncoder.executeBundles([renderBundle]);
+    }
+
+    if (this.metaballsPipeline) {
+      passEncoder.setPipeline(this.metaballsPipeline);
+      passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
+      passEncoder.setVertexBuffer(0, this.metaballsVertexBuffer);
+      passEncoder.setIndexBuffer(this.metaballsIndexBuffer, 'uint16');
+      passEncoder.drawIndexed(this.metaballsIndexCount, 1, 0, 0, 0);
     }
 
     if (this.lightManager.render) {

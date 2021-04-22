@@ -19,6 +19,7 @@
 // SOFTWARE.
 
 import { vec3, mat4 } from 'gl-matrix';
+import { Metaballs } from './metaballs.js';
 
 const lightFloatCount = 8;
 const lightByteSize = lightFloatCount * 4;
@@ -37,16 +38,16 @@ class Light {
     this.travelTime = 0;
     this.static = true;
 
-    this.range = -1;
-    this.intensity = 1;
+    this._range = -1;
   }
 
   get range() {
-    return this.rangeArray[0];
+    return this._range;
   }
 
   set range(value) {
-    this.rangeArray[0] = value;
+    this._range = value;
+    this.rangeArray[0] = this._range >= 0 ? this._range : this.computedRange;
   }
 
   get intensity() {
@@ -55,6 +56,13 @@ class Light {
 
   set intensity(value) {
     this.intensityArray[0] = value;
+    this.rangeArray[0] = this._range >= 0 ? this._range : this.computedRange;
+  }
+
+  get computedRange() {
+    const lightRadius = 0.05;
+    const illuminationThreshold = 0.001;
+    return lightRadius * (Math.sqrt(this.intensityArray[0]/illuminationThreshold) - 1);
   }
 }
 
@@ -119,6 +127,8 @@ export class Renderer {
     // Ambient color
     //vec3.set(this.lightManager.ambientColor, 0.02, 0.02, 0.02);
 
+    this.metaballs = new Metaballs();
+
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
       const timeDelta = lastTimestamp == -1 ? 0 : timestamp - lastTimestamp;
@@ -174,7 +184,7 @@ export class Renderer {
       if (gltfLight.type == "point") {
         const light = this.lightManager.lights[i];
         light.static = true;
-        light.range = 4.5; //gltfLight.range;
+        light.range = gltfLight.range;
         light.intensity = gltfLight.intensity;
         vec3.copy(light.color, gltfLight.color);
         vec3.copy(light.position, gltfLight.position);
@@ -268,6 +278,12 @@ export class Renderer {
     }
   }
 
+  updateMetaballs(timestamp) {
+    // Override with renderer-specific mesh upload logic, but be sure to call
+    // super.updateMetaballs so that the animation logic can be processed.
+    this.metaballs.updateBalls(timestamp);
+  }
+
   // Handles frame logic that's common to all renderers.
   beforeFrame(timestamp, timeDelta) {
     // Copy values from the camera into our frame uniform buffers
@@ -275,6 +291,7 @@ export class Renderer {
     vec3.copy(this.cameraPosition, this.camera.position);
 
     this.updateWanderingLights(timeDelta);
+    this.updateMetaballs(timestamp);
   }
 
   onResize(width, height) {
