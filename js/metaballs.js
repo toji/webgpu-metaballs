@@ -18,13 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { Isosurface } from './marching-cubes.js'
+import { MarchingCubesIsosurface } from './marching-cubes-isosurface.js'
 import { vec3 } from 'gl-matrix';
 
 const TMP_VEC3 = vec3.create();
 const TMP_VEC3_2 = vec3.create();
 
-export class Metaballs extends Isosurface {
+export class Metaballs extends MarchingCubesIsosurface {
   constructor() {
     const volume = {
       xMin: -1,
@@ -121,10 +121,11 @@ export class Metaballs extends Isosurface {
     vec3.set(TMP_VEC3, x, y, z);
 
     if (y <= 0.1) {
+      // Normal of the floor is always straight up
       vec3.set(out, 0, 1, 0);
       return;
     }
-    
+
     vec3.set(out, 0, 0, 0);
     for (const ball of this.balls) {
       if (vec3.dist(TMP_VEC3, ball.position) <= ball.radius) {

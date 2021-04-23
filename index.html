@@ -73,8 +73,9 @@
         output: 'clustered-forward',
         mesh: './media/models/dungeon/dungeon.glb',
         renderLightSprites: true,
-        enableSceneLights: true,
-        enableMetaballLights: true,
+        sceneLights: true,
+        metaballLights: true,
+        metaballStyle: 'lava',
       };
 
       let gui = new dat.GUI();
@@ -89,16 +90,24 @@
         }
       });
 
-      gui.add(appSettings, 'enableSceneLights').onChange(() => {
+      gui.add(appSettings, 'sceneLights').onChange(() => {
         if (renderer) {
-          renderer.enableLights(appSettings.enableSceneLights, appSettings.enableMetaballLights);
+          renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
         }
       });
 
-      gui.add(appSettings, 'enableMetaballLights').onChange(() => {
+      gui.add(appSettings, 'metaballLights').onChange(() => {
         if (renderer) {
-          renderer.enableLights(appSettings.enableSceneLights, appSettings.enableMetaballLights);
+          renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
         }
+      });
+
+      gui.add(appSettings, 'metaballStyle', {
+        lava: 'lava',
+        water: 'water',
+        slime: 'slime'
+      }).onChange(() => {
+        renderer.setMetaballStyle(appSettings.metaballStyle);
       });
 
       document.body.appendChild(gui.domElement);
@@ -142,6 +151,7 @@
             renderer.lightManager.lightCount = appSettings.lightCount;
             renderer.updateLightRange(appSettings.maxLightRange);
             renderer.lightManager.render = appSettings.renderLightSprites;
+            renderer.setMetaballStyle(appSettings.metaballStyle);
 
             onOutputChange();
 

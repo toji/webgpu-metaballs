@@ -293,6 +293,23 @@ export class Renderer {
     }
   }
 
+  setMetaballStyle(style) {
+    switch(style) {
+      case 'lava':
+        this.metaballLightColor = [0.9, 0.1, 0.0];
+        this.metaballTexturePath = './media/textures/lava.jpg';
+        break;
+      case 'slime':
+        this.metaballLightColor = [0.0, 0.9, 0.0];
+        this.metaballTexturePath = './media/textures/slime.png';
+        break;
+      case 'water':
+        this.metaballLightColor = [0.4, 0.5, 0.9];
+        this.metaballTexturePath = './media/textures/water.jpg';
+        break;
+    }
+  }
+
   updateMetaballs(timestamp) {
     // Override with renderer-specific mesh upload logic, but be sure to call
     // super.updateMetaballs so that the animation logic can be processed.
@@ -304,7 +321,7 @@ export class Renderer {
       let light = this.lightManager.lights[lightIndex];
       light.static = true;
 
-      vec3.set(light.color, 0.9, 0.1, 0.0);
+      vec3.copy(light.color, this.metaballLightColor);
       light.intensity = 6;
       vec3.copy(light.position, ball.position);
 

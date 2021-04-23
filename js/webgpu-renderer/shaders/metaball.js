@@ -66,7 +66,7 @@ export const MetaballFragmentSource = `
 
     var blending : vec3<f32> = abs(normal);
     blending = normalize(max(blending, vec3<f32>(0.00001, 0.00001, 0.00001))); // Force weights to sum to 1.0
-    
+
     let xTex : vec4<f32> = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
     let yTex : vec4<f32> = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
     let zTex : vec4<f32> = textureSample(baseTexture, baseSampler, input.worldPosition.xy + input.flow.xy);
@@ -74,8 +74,5 @@ export const MetaballFragmentSource = `
     let tex : vec4<f32> = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
     return vec4<f32>(linearTosRGB(tex.xyz), 1.0);
-
-    //let color : vec3<f32> = linearTosRGB(vec3<f32>(1.0, 0.0, 0.0) + (normal * 0.1));
-    //return vec4<f32>(color, 1.0);
   }
 `;

@@ -359,7 +359,7 @@ const DEFAULT_VOLUME = {
   zStep: 0.1,
 };
 
-export class Isosurface {
+export class MarchingCubesIsosurface {
   constructor(surfaceVolume = {}) {
     this.volume = Object.assign({}, DEFAULT_VOLUME, surfaceVolume);
   }

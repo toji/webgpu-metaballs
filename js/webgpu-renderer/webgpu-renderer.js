@@ -176,6 +176,20 @@ export class WebGPURenderer extends Renderer {
           buffer: {}
         }]
       }),
+
+      metaball: this.device.createBindGroupLayout({
+        label: `lava-bgl`,
+        entries: [{
+          binding: 0, // sampler
+          visibility: GPUShaderStage.FRAGMENT,
+          sampler: {}
+        },
+        {
+          binding: 1, // texture
+          visibility: GPUShaderStage.FRAGMENT,
+          texture: {}
+        }]
+      })
     };
 
     this.pipelineLayout = this.device.createPipelineLayout({
@@ -234,9 +248,15 @@ export class WebGPURenderer extends Renderer {
     this.whiteTextureView = this.textureLoader.fromColor(1.0, 1.0, 1.0, 1.0).texture.createView();
     this.blueTextureView = this.textureLoader.fromColor(0, 0, 1.0, 0).texture.createView();
 
-    this.lightSprites = new WebGPULightSprites(this);
+    this.defaultSampler = this.device.createSampler({
+      addressModeU: 'repeat',
+      addressModeV: 'repeat',
+      magFilter: 'linear',
+      minFilter: 'linear',
+      mipmapFilter: 'linear',
+    });
 
-    this.lavaTexture = await this.textureLoader.fromUrl('./media/textures/lava.jpg', {colorSpace: 'sRGB'});
+    this.lightSprites = new WebGPULightSprites(this);
   }
 
   onResize(width, height) {
@@ -439,6 +459,23 @@ export class WebGPURenderer extends Renderer {
     }
   }
 
+  async setMetaballStyle(style) {
+    super.setMetaballStyle(style);
+
+    const metaballTexture = await this.textureLoader.fromUrl(this.metaballTexturePath, {colorSpace: 'sRGB'});
+
+    this.bindGroups.metaball = this.device.createBindGroup({
+      layout: this.bindGroupLayouts.metaball,
+      entries: [{
+        binding: 0,
+        resource: this.defaultSampler,
+      }, {
+        binding: 1,
+        resource: metaballTexture.texture.createView(),
+      }],
+    });
+  }
+
   updateMetaballs(timestamp) {
     super.updateMetaballs(timestamp);
 
@@ -462,42 +499,11 @@ export class WebGPURenderer extends Renderer {
         usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
       });
 
-      const lavaBindGroupLayout = this.device.createBindGroupLayout({
-        label: `lava-bgl`,
-        entries: [{
-          binding: 0, // sampler
-          visibility: GPUShaderStage.FRAGMENT,
-          sampler: {}
-        },
-        {
-          binding: 1, // texture
-          visibility: GPUShaderStage.FRAGMENT,
-          texture: {}
-        }]
-      });
-
-      this.bindGroups.lava = this.device.createBindGroup({
-        layout: lavaBindGroupLayout,
-        entries: [{
-          binding: 0,
-          resource: this.device.createSampler({
-            addressModeU: 'repeat',
-            addressModeV: 'repeat',
-            magFilter: 'linear',
-            minFilter: 'linear',
-            mipmapFilter: 'linear',
-          }),
-        }, {
-          binding: 1,
-          resource: this.lavaTexture.texture.createView(),
-        }],
-      });
-
       this.metaballsPipeline = this.device.createRenderPipeline({
         layout: this.device.createPipelineLayout({
           bindGroupLayouts: [
             this.bindGroupLayouts.frame,
-            lavaBindGroupLayout
+            this.bindGroupLayouts.metaball
           ]
         }),
         vertex: {
@@ -612,10 +618,10 @@ export class WebGPURenderer extends Renderer {
       passEncoder.executeBundles([renderBundle]);
     }
 
-    if (this.metaballsPipeline) {
+    if (this.metaballsPipeline && this.bindGroups.metaball) {
       passEncoder.setPipeline(this.metaballsPipeline);
       passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
-      passEncoder.setBindGroup(1, this.bindGroups.lava);
+      passEncoder.setBindGroup(1, this.bindGroups.metaball);
       passEncoder.setVertexBuffer(0, this.metaballsVertexBuffer);
       passEncoder.setVertexBuffer(1, this.metaballsNormalBuffer);
       passEncoder.setIndexBuffer(this.metaballsIndexBuffer, 'uint16');
