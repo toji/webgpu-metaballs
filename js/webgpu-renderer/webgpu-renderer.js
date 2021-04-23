@@ -23,18 +23,12 @@ import './wgsl-debug-helper.js';
 
 import { Renderer } from '../renderer.js';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
-import { PBRRenderBundleHelper } from './pbr-render-bundle-helper.js';
-import { vec2, vec3, vec4 } from 'gl-matrix';
+
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
 import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
+import { WebGPUglTF } from './webgpu-gltf.js';
 import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball.js';
-
-// Can reuse these for every PBR material
-const materialUniforms = new Float32Array(4 + 4 + 4);
-const baseColorFactor = new Float32Array(materialUniforms.buffer, 0, 4);
-const metallicRoughnessFactor = new Float32Array(materialUniforms.buffer, 4 * 4, 2);
-const emissiveFactor = new Float32Array(materialUniforms.buffer, 8 * 4, 3);
 
 const SAMPLE_COUNT = 4;
 const DEPTH_FORMAT = "depth24plus";
@@ -50,15 +44,9 @@ export class WebGPURenderer extends Renderer {
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('gpupresent');
-
-    this.outputHelpers = {
-      'clustered-forward': PBRRenderBundleHelper,
-    };
   }
 
   async init() {
-    this.outputRenderBundles = {};
-
     this.adapter = await navigator.gpu.requestAdapter({
       powerPreference: "high-performance"
     });
@@ -244,10 +232,6 @@ export class WebGPURenderer extends Renderer {
       })
     }
 
-    this.blackTextureView = this.textureLoader.fromColor(0, 0, 0, 0).texture.createView();
-    this.whiteTextureView = this.textureLoader.fromColor(1.0, 1.0, 1.0, 1.0).texture.createView();
-    this.blueTextureView = this.textureLoader.fromColor(0, 0, 1.0, 0).texture.createView();
-
     this.defaultSampler = this.device.createSampler({
       addressModeU: 'repeat',
       addressModeV: 'repeat',
@@ -257,6 +241,69 @@ export class WebGPURenderer extends Renderer {
     });
 
     this.lightSprites = new WebGPULightSprites(this);
+
+    // Metaball resources
+    this.metaballsVertexBuffer = this.device.createBuffer({
+      size: METABALLS_VERTEX_BUFFER_SIZE,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+    });
+
+    this.metaballsNormalBuffer = this.device.createBuffer({
+      size: METABALLS_VERTEX_BUFFER_SIZE,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+    });
+
+    this.metaballsIndexBuffer = this.device.createBuffer({
+      size: METABALLS_INDEX_BUFFER_SIZE,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
+    });
+
+    this.metaballsPipeline = this.device.createRenderPipeline({
+      layout: this.device.createPipelineLayout({
+        bindGroupLayouts: [
+          this.bindGroupLayouts.frame,
+          this.bindGroupLayouts.metaball
+        ]
+      }),
+      vertex: {
+        module: this.device.createShaderModule({ code: MetaballVertexSource }),
+        entryPoint: "vertexMain",
+        buffers: [{
+          arrayStride: 12,
+          attributes: [{
+            shaderLocation: ATTRIB_MAP.POSITION,
+            format: 'float32x3',
+            offset: 0
+          }],
+        }, {
+          arrayStride: 12,
+          attributes: [{
+            shaderLocation: ATTRIB_MAP.NORMAL,
+            format: 'float32x3',
+            offset: 0
+          }],
+        }]
+      },
+      fragment: {
+        module: this.device.createShaderModule({ code: MetaballFragmentSource }),
+        entryPoint: "fragmentMain",
+        targets: [{
+          format: this.swapChainFormat,
+        }]
+      },
+      primitive: {
+        topology: 'triangle-list',
+        cullMode: 'none',
+      },
+      depthStencil: {
+        format: DEPTH_FORMAT,
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+      },
+      multisample: {
+        count: SAMPLE_COUNT
+      }
+    });
   }
 
   onResize(width, height) {
@@ -285,178 +332,10 @@ export class WebGPURenderer extends Renderer {
     this.clusteredLights.updateClusterBounds();
   }
 
-  async setGltf(gltf) {
-    super.setGltf(gltf);
-
-    const resourcePromises = [];
-
-    for (let bufferView of gltf.bufferViews) {
-      resourcePromises.push(this.initBufferView(bufferView));
-    }
-
-    for (let image of gltf.images) {
-      resourcePromises.push(this.initImage(image));
-    }
-
-    for (let sampler of gltf.samplers) {
-      this.initSampler(sampler);
-    }
-
-    this.initNode(gltf.scene);
-
-    await Promise.all(resourcePromises);
-
-    for (let material of gltf.materials) {
-      this.initMaterial(material);
-    }
-
-    for (let primitive of gltf.primitives) {
-      this.initPrimitive(primitive);
-    }
-
-    this.outputRenderBundles = {};
-    this.primitives = gltf.primitives;
-
+  async setScene(gltf) {
+    super.setScene(gltf);
+    this.scene = new WebGPUglTF(this, gltf);
     this.updateMetaballs(0);
-  }
-
-  async initBufferView(bufferView) {
-    let usage = 0;
-    if (bufferView.usage.has('vertex')) {
-      usage |= GPUBufferUsage.VERTEX;
-    }
-    if (bufferView.usage.has('index')) {
-      usage |= GPUBufferUsage.INDEX;
-    }
-
-    if (!usage) {
-      return;
-    }
-
-    // Oh FFS. Buffer copies have to be 4 byte aligned, I guess. >_<
-    const alignedLength = Math.ceil(bufferView.byteLength / 4) * 4;
-
-    const gpuBuffer = this.device.createBuffer({
-      size: alignedLength,
-      usage: usage | GPUBufferUsage.COPY_DST
-    });
-    bufferView.renderData.gpuBuffer = gpuBuffer;
-
-    // TODO: Pretty sure this can all be handled more efficiently.
-    const copyBuffer = this.device.createBuffer({
-      size: alignedLength,
-      usage: GPUBufferUsage.COPY_SRC,
-      mappedAtCreation: true
-    });
-    const copyBufferArray = new Uint8Array(copyBuffer.getMappedRange());
-
-    const bufferData = await bufferView.dataView;
-
-    const srcByteArray = new Uint8Array(bufferData.buffer, bufferData.byteOffset, bufferData.byteLength);
-    copyBufferArray.set(srcByteArray);
-    copyBuffer.unmap();
-
-    const commandEncoder = this.device.createCommandEncoder({});
-    commandEncoder.copyBufferToBuffer(copyBuffer, 0, gpuBuffer, 0, alignedLength);
-    this.device.queue.submit([commandEncoder.finish()]);
-  }
-
-  async initImage(image) {
-    const result = await this.textureLoader.fromBlob(await image.blob, {colorSpace: image.colorSpace});
-    image.gpuTextureView = result.texture.createView();
-  }
-
-  initSampler(sampler) {
-    sampler.renderData.gpuSampler = this.device.createSampler(sampler.gpuSamplerDescriptor);
-  }
-
-  initMaterial(material) {
-    vec4.copy(baseColorFactor, material.baseColorFactor);
-    vec2.copy(metallicRoughnessFactor, material.metallicRoughnessFactor);
-    vec3.copy(emissiveFactor, material.emissiveFactor);
-
-    const materialBuffer = this.device.createBuffer({
-      size: materialUniforms.byteLength,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    });
-
-    this.device.queue.writeBuffer(materialBuffer, 0, materialUniforms);
-
-    const materialBindGroup = this.device.createBindGroup({
-      layout: this.bindGroupLayouts.material,
-      entries: [{
-        binding: 0,
-        resource: {
-          buffer: materialBuffer,
-        },
-      },
-      {
-        binding: 1,
-        // TODO: Do we really need to pass one sampler per texture for accuracy? :(
-        resource: material.baseColorTexture.sampler.renderData.gpuSampler,
-      },
-      {
-        binding: 2,
-        resource: material.baseColorTexture ? material.baseColorTexture.image.gpuTextureView : this.whiteTextureView,
-      },
-      {
-        binding: 3,
-        resource: material.normalTexture ? material.normalTexture.image.gpuTextureView : this.blueTextureView,
-      },
-      {
-        binding: 4,
-        resource: material.metallicRoughnessTexture ? material.metallicRoughnessTexture.image.gpuTextureView : this.whiteTextureView,
-      },
-      {
-        binding: 5,
-        resource: material.occlusionTexture ? material.occlusionTexture.image.gpuTextureView : this.whiteTextureView,
-      },
-      {
-        binding: 6,
-        resource: material.emissiveTexture ? material.emissiveTexture.image.gpuTextureView : this.blackTextureView,
-      }],
-    });
-
-    material.renderData.gpuBindGroup = materialBindGroup;
-  }
-
-  initPrimitive(primitive) {
-    const bufferSize = 16 * 4;
-
-    // TODO: Support multiple instances
-    if (primitive.renderData.instances.length) {
-      const modelBuffer = this.device.createBuffer({
-        size: bufferSize,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-      });
-
-      this.device.queue.writeBuffer(modelBuffer, 0, primitive.renderData.instances[0]);
-
-      const modelBindGroup = this.device.createBindGroup({
-        layout: this.bindGroupLayouts.primitive,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: modelBuffer,
-          },
-        }],
-      });
-
-      primitive.renderData.gpuBindGroup = modelBindGroup;
-    }
-  }
-
-  initNode(node) {
-    for (let primitive of node.primitives) {
-      if (!primitive.renderData.instances) {
-        primitive.renderData.instances = [];
-      }
-      primitive.renderData.instances.push(node.worldMatrix);
-    }
-
-    for (let childNode of node.children) {
-      this.initNode(childNode);
-    }
   }
 
   async setMetaballStyle(style) {
@@ -479,72 +358,8 @@ export class WebGPURenderer extends Renderer {
   updateMetaballs(timestamp) {
     super.updateMetaballs(timestamp);
 
-    if (!this.primitives) {
+    if (!this.scene) {
       return;
-    }
-
-    if (!this.metaballsPipeline) {
-      this.metaballsVertexBuffer = this.device.createBuffer({
-        size: METABALLS_VERTEX_BUFFER_SIZE,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-      });
-
-      this.metaballsNormalBuffer = this.device.createBuffer({
-        size: METABALLS_VERTEX_BUFFER_SIZE,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-      });
-
-      this.metaballsIndexBuffer = this.device.createBuffer({
-        size: METABALLS_INDEX_BUFFER_SIZE,
-        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
-      });
-
-      this.metaballsPipeline = this.device.createRenderPipeline({
-        layout: this.device.createPipelineLayout({
-          bindGroupLayouts: [
-            this.bindGroupLayouts.frame,
-            this.bindGroupLayouts.metaball
-          ]
-        }),
-        vertex: {
-          module: this.device.createShaderModule({ code: MetaballVertexSource }),
-          entryPoint: "vertexMain",
-          buffers: [{
-            arrayStride: 12,
-            attributes: [{
-              shaderLocation: ATTRIB_MAP.POSITION,
-              format: 'float32x3',
-              offset: 0
-            }],
-          }, {
-            arrayStride: 12,
-            attributes: [{
-              shaderLocation: ATTRIB_MAP.NORMAL,
-              format: 'float32x3',
-              offset: 0
-            }],
-          }]
-        },
-        fragment: {
-          module: this.device.createShaderModule({ code: MetaballFragmentSource }),
-          entryPoint: "fragmentMain",
-          targets: [{
-            format: this.swapChainFormat,
-          }]
-        },
-        primitive: {
-          topology: 'triangle-list',
-          cullMode: 'none',
-        },
-        depthStencil: {
-          format: DEPTH_FORMAT,
-          depthWriteEnabled: true,
-          depthCompare: 'less',
-        },
-        multisample: {
-          count: SAMPLE_COUNT
-        }
-      });
     }
 
     this.metaballsVertexCopyBuffer = this.device.createBuffer({
@@ -569,8 +384,6 @@ export class WebGPURenderer extends Renderer {
       positions: new Float32Array(this.metaballsVertexCopyBuffer.getMappedRange()),
       normals: new Float32Array(this.metaballsNormalCopyBuffer.getMappedRange()),
       indices: new Uint16Array(this.metaballsIndexCopyBuffer.getMappedRange()),
-      vertexOffset: 0,
-      indexOffset: 0,
     };
 
     this.metaballsIndexCount = this.metaballs.generateMesh(arrays);
@@ -601,24 +414,16 @@ export class WebGPURenderer extends Renderer {
     // Update the light unform buffer with the latest values as well.
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
 
-    // Create a render bundle for the requested output type if one doesn't already exist.
-    let renderBundle = this.outputRenderBundles[this.outputType];
-    if (!renderBundle && this.primitives) {
-      const helperConstructor = this.outputHelpers[this.outputType];
-      const renderBundleHelper = new helperConstructor(this);
-      renderBundle = this.outputRenderBundles[this.outputType] = renderBundleHelper.createRenderBundle(this.primitives);
-    }
-
     const commandEncoder = this.device.createCommandEncoder({});
     this.clusteredLights.updateClusterLights(commandEncoder);
 
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
-    if (renderBundle) {
-      passEncoder.executeBundles([renderBundle]);
+    if (this.scene) {
+      this.scene.draw(passEncoder);
     }
 
-    if (this.metaballsPipeline && this.bindGroups.metaball) {
+    if (this.drawMetaballs && this.metaballsIndexCount && this.bindGroups.metaball) {
       passEncoder.setPipeline(this.metaballsPipeline);
       passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
       passEncoder.setBindGroup(1, this.bindGroups.metaball);

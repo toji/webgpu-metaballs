@@ -142,6 +142,7 @@ export class Renderer {
     //vec3.set(this.lightManager.ambientColor, 0.02, 0.02, 0.02);
 
     this.metaballs = new Metaballs();
+    this.drawMetaballs = true;
 
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
@@ -189,9 +190,9 @@ export class Renderer {
     this.stats = stats;
   }
 
-  setGltf(gltf) {
+  setScene(gltf) {
     // Override with renderer-specific mesh loading logic, but be sure to call
-    // super.setGltf so that the light logic can be processed.
+    // super.setScene so that the light logic can be processed.
 
     for (let i = 0; i < gltf.lights.length; ++i) {
       const gltfLight = gltf.lights[i];
@@ -266,34 +267,8 @@ export class Renderer {
     window.removeEventListener('resize', this.resizeCallback);
   }
 
-  updateWanderingLights(timeDelta) {
-    for (let i = 0; i < this.lightManager.lightCount; ++i) {
-      let light = this.lightManager.lights[i];
-      if (light.static) { continue; }
-
-      light.travelTime -= timeDelta;
-
-      if (light.travelTime <= 0) {
-        light.travelTime = randomBetween(500, 2000);
-        light.destination[0] = randomBetween(-11, 10);
-        light.destination[1] = randomBetween(0.2, 6.5);
-        light.destination[2] = randomBetween(-4.5, 4.0);
-      }
-
-      light.velocity[0] += (light.destination[0] - light.position[0]) * 0.000005 * timeDelta;
-      light.velocity[1] += (light.destination[1] - light.position[1]) * 0.000005 * timeDelta;
-      light.velocity[2] += (light.destination[2] - light.position[2]) * 0.000005 * timeDelta;
-
-      // Clamp the velocity
-      if (vec3.length(light.velocity) > 0.05) {
-        vec3.scale(light.velocity, vec3.normalize(light.velocity, light.velocity), 0.05);
-      }
-
-      vec3.add(light.position, light.position, light.velocity);
-    }
-  }
-
   setMetaballStyle(style) {
+    this.drawMetaballs = true;
     switch(style) {
       case 'lava':
         this.metaballLightColor = [0.9, 0.1, 0.0];
@@ -306,6 +281,10 @@ export class Renderer {
       case 'water':
         this.metaballLightColor = [0.4, 0.5, 0.9];
         this.metaballTexturePath = './media/textures/water.jpg';
+        break;
+      case 'none':
+        this.drawMetaballs = false;
+        this.lightManager.lightCount = this.sceneLightCount;
         break;
     }
   }
@@ -349,8 +328,9 @@ export class Renderer {
     vec3.copy(this.cameraPosition, this.camera.position);
     this.timeArray[0] = timestamp;
 
-    this.updateWanderingLights(timeDelta);
-    this.updateMetaballs(timestamp);
+    if (this.drawMetaballs) {
+      this.updateMetaballs(timestamp);
+    }
   }
 
   onResize(width, height) {
