@@ -143,6 +143,7 @@ export class Renderer {
 
     this.metaballs = new Metaballs();
     this.drawMetaballs = true;
+    this.uploadMethod = null;
 
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
@@ -208,28 +209,6 @@ export class Renderer {
 
     this.sceneLightCount = gltf.lights.length;
     this.lightManager.lightCount = gltf.lights.length;
-
-    // Initialize positions and colors for all the lights
-    /*for (let i = 0; i < this.lightManager.maxLightCount; ++i) {
-      let light = this.lightManager.lights[i];
-      light.static = false;
-
-      // Sponza scene approximate bounds:
-      // X [-11, 10]
-      // Y [0.2, 6.5]
-      // Z [-4.5, 4.0]
-      light.position[0] = randomBetween(-11, 10);
-      light.position[1] = randomBetween(0.2, 6.5);
-      light.position[2] = randomBetween(-4.5, 4.0);
-
-      light.range = 2;
-
-      vec3.set(light.color,
-        randomBetween(0.1, 1),
-        randomBetween(0.1, 1),
-        randomBetween(0.1, 1)
-      );
-    }*/
   }
 
   setViewMatrix(viewMatrix) {
@@ -265,6 +244,10 @@ export class Renderer {
       this.rafId = 0;
     }
     window.removeEventListener('resize', this.resizeCallback);
+  }
+
+  setMetaballMethod(method) {
+    // Override
   }
 
   setMetaballStyle(style) {

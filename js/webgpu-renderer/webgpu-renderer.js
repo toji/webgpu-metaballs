@@ -23,12 +23,26 @@ import './wgsl-debug-helper.js';
 
 import { Renderer } from '../renderer.js';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
-
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
 import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
-import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball.js';
+
+import {
+  MetaballWriteBuffer,
+  MetaballNewBuffer,
+  MetaballNewStagingBuffer,
+  MetaballSingleStagingBuffer,
+  MetaballStagingBufferRing
+} from './webgpu-metaball-renderer.js';
+
+const MetaballMethods = {
+  writeBuffer: MetaballWriteBuffer,
+  newBuffer: MetaballNewBuffer,
+  newStaging: MetaballNewStagingBuffer,
+  singleStaging: MetaballSingleStagingBuffer,
+  stagingRing: MetaballStagingBufferRing,
+};
 
 const SAMPLE_COUNT = 4;
 const DEPTH_FORMAT = "depth24plus";
@@ -55,6 +69,11 @@ export class WebGPURenderer extends Renderer {
     const nonGuaranteedFeatures = [];
     if (this.adapter.features.has('texture-compression-bc') != -1) {
       nonGuaranteedFeatures.push('texture-compression-bc');
+    }
+
+    // Enable timestamp queries if available
+    if (this.adapter.features.has('timestamp-query') != -1) {
+      nonGuaranteedFeatures.push('timestamp-query');
     }
 
     this.device = await this.adapter.requestDevice({nonGuaranteedFeatures});
@@ -242,68 +261,8 @@ export class WebGPURenderer extends Renderer {
 
     this.lightSprites = new WebGPULightSprites(this);
 
-    // Metaball resources
-    this.metaballsVertexBuffer = this.device.createBuffer({
-      size: METABALLS_VERTEX_BUFFER_SIZE,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-    });
-
-    this.metaballsNormalBuffer = this.device.createBuffer({
-      size: METABALLS_VERTEX_BUFFER_SIZE,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-    });
-
-    this.metaballsIndexBuffer = this.device.createBuffer({
-      size: METABALLS_INDEX_BUFFER_SIZE,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
-    });
-
-    this.metaballsPipeline = this.device.createRenderPipeline({
-      layout: this.device.createPipelineLayout({
-        bindGroupLayouts: [
-          this.bindGroupLayouts.frame,
-          this.bindGroupLayouts.metaball
-        ]
-      }),
-      vertex: {
-        module: this.device.createShaderModule({ code: MetaballVertexSource }),
-        entryPoint: "vertexMain",
-        buffers: [{
-          arrayStride: 12,
-          attributes: [{
-            shaderLocation: ATTRIB_MAP.POSITION,
-            format: 'float32x3',
-            offset: 0
-          }],
-        }, {
-          arrayStride: 12,
-          attributes: [{
-            shaderLocation: ATTRIB_MAP.NORMAL,
-            format: 'float32x3',
-            offset: 0
-          }],
-        }]
-      },
-      fragment: {
-        module: this.device.createShaderModule({ code: MetaballFragmentSource }),
-        entryPoint: "fragmentMain",
-        targets: [{
-          format: this.swapChainFormat,
-        }]
-      },
-      primitive: {
-        topology: 'triangle-list',
-        cullMode: 'none',
-      },
-      depthStencil: {
-        format: DEPTH_FORMAT,
-        depthWriteEnabled: true,
-        depthCompare: 'less',
-      },
-      multisample: {
-        count: SAMPLE_COUNT
-      }
-    });
+    this.metaballRenderer = null;
+    this.metaballsNeedUpdate = true;
   }
 
   onResize(width, height) {
@@ -338,6 +297,23 @@ export class WebGPURenderer extends Renderer {
     this.updateMetaballs(0);
   }
 
+  setMetaballMethod(method) {
+    /*'writeBuffer()': 'writeBuffer',
+      'New staging buffer each frame': 'newMapped',
+      'Single staging buffer re-mapped each frame': 'singleMapped',
+      'Ring of staging buffers': 'ringMapped',
+      'GPU generated': 'gpuGenerated',*/
+
+    const rendererConstructor = MetaballMethods[method];
+    if (!rendererConstructor) {
+      this.metaballRenderer = null;
+      return;
+    }
+
+    this.metaballRenderer = new rendererConstructor(this, METABALLS_VERTEX_BUFFER_SIZE, METABALLS_INDEX_BUFFER_SIZE);
+    this.metaballsNeedUpdate = true;
+  }
+
   async setMetaballStyle(style) {
     super.setMetaballStyle(style);
 
@@ -355,51 +331,19 @@ export class WebGPURenderer extends Renderer {
     });
   }
 
-  updateMetaballs(timestamp) {
-    super.updateMetaballs(timestamp);
+  async updateMetaballs(timestamp) {
+    if (this.metaballsNeedUpdate && this.metaballRenderer) {
+      this.metaballsNeedUpdate = false;
 
-    if (!this.scene) {
-      return;
+      super.updateMetaballs(timestamp);
+
+      /*if (!this.scene) {
+        return;
+      }*/
+
+      await this.metaballRenderer.update(this.metaballs);
+      this.metaballsNeedUpdate = true;
     }
-
-    this.metaballsVertexCopyBuffer = this.device.createBuffer({
-      size: METABALLS_VERTEX_BUFFER_SIZE,
-      usage: GPUBufferUsage.COPY_SRC,
-      mappedAtCreation: true,
-    });
-
-    this.metaballsNormalCopyBuffer = this.device.createBuffer({
-      size: METABALLS_VERTEX_BUFFER_SIZE,
-      usage: GPUBufferUsage.COPY_SRC,
-      mappedAtCreation: true,
-    });
-
-    this.metaballsIndexCopyBuffer = this.device.createBuffer({
-      size: METABALLS_INDEX_BUFFER_SIZE,
-      usage: GPUBufferUsage.COPY_SRC,
-      mappedAtCreation: true,
-    });
-
-    const arrays = {
-      positions: new Float32Array(this.metaballsVertexCopyBuffer.getMappedRange()),
-      normals: new Float32Array(this.metaballsNormalCopyBuffer.getMappedRange()),
-      indices: new Uint16Array(this.metaballsIndexCopyBuffer.getMappedRange()),
-    };
-
-    this.metaballsIndexCount = this.metaballs.generateMesh(arrays);
-
-    this.metaballsVertexCopyBuffer.unmap();
-    this.metaballsNormalCopyBuffer.unmap();
-    this.metaballsIndexCopyBuffer.unmap();
-
-    const commandEncoder = this.device.createCommandEncoder({});
-    commandEncoder.copyBufferToBuffer(this.metaballsVertexCopyBuffer, 0, this.metaballsVertexBuffer, 0, METABALLS_VERTEX_BUFFER_SIZE);
-    commandEncoder.copyBufferToBuffer(this.metaballsNormalCopyBuffer, 0, this.metaballsNormalBuffer, 0, METABALLS_VERTEX_BUFFER_SIZE);
-    commandEncoder.copyBufferToBuffer(this.metaballsIndexCopyBuffer, 0, this.metaballsIndexBuffer, 0, METABALLS_INDEX_BUFFER_SIZE);
-    this.device.queue.submit([commandEncoder.finish()]);
-
-    this.metaballsVertexCopyBuffer.destroy();
-    this.metaballsIndexCopyBuffer.destroy();
   }
 
   onFrame(timestamp) {
@@ -423,14 +367,9 @@ export class WebGPURenderer extends Renderer {
       this.scene.draw(passEncoder);
     }
 
-    if (this.drawMetaballs && this.metaballsIndexCount && this.bindGroups.metaball) {
-      passEncoder.setPipeline(this.metaballsPipeline);
-      passEncoder.setBindGroup(BIND_GROUP.Frame, this.bindGroups.frame);
-      passEncoder.setBindGroup(1, this.bindGroups.metaball);
-      passEncoder.setVertexBuffer(0, this.metaballsVertexBuffer);
-      passEncoder.setVertexBuffer(1, this.metaballsNormalBuffer);
-      passEncoder.setIndexBuffer(this.metaballsIndexBuffer, 'uint16');
-      passEncoder.drawIndexed(this.metaballsIndexCount, 1, 0, 0, 0);
+    if (this.drawMetaballs && this.metaballRenderer && this.bindGroups.metaball) {
+      // Draw metaballs.
+      this.metaballRenderer.draw(passEncoder);
     }
 
     if (this.lightManager.render) {

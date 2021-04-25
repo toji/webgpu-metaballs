@@ -69,9 +69,8 @@
       //camera.rotateView(-Math.PI * 0.5, 0);
 
       const appSettings = {
-        renderer: 'webGPU',
-        output: 'clustered-forward',
-        mesh: './media/models/dungeon/dungeon.glb',
+        scene: './media/models/dungeon/dungeon.glb',
+        metaballMethod: 'newBuffer',
         renderLightSprites: true,
         sceneLights: true,
         metaballLights: true,
@@ -80,29 +79,40 @@
 
       let gui = new dat.GUI();
 
-      /*gui.add(appSettings, 'renderer', {
-        webGPU: 'webGPU'
-      }).onChange(onApiChange);*/
+      gui.add(appSettings, 'metaballMethod', {
+        'writeBuffer()': 'writeBuffer',
+        'New buffer each frame': 'newBuffer',
+        'New staging buffer each frame': 'newStaging',
+        'Single staging buffer re-mapped each frame': 'singleStaging',
+        'Ring of staging buffers': 'stagingRing',
+        'GPU generated': 'gpuGenerated',
+      }).onChange(() => {
+        if (renderer) {
+          renderer.setMetaballMethod(appSettings.metaballMethod);
+        }
+      });
 
-      gui.add(appSettings, 'renderLightSprites').onChange(() => {
+      let rendering = gui.addFolder('Rendering');
+
+      rendering.add(appSettings, 'renderLightSprites').onChange(() => {
         if (renderer) {
           renderer.lightManager.render = appSettings.renderLightSprites;
         }
       });
 
-      gui.add(appSettings, 'sceneLights').onChange(() => {
+      rendering.add(appSettings, 'sceneLights').onChange(() => {
         if (renderer) {
           renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
         }
       });
 
-      gui.add(appSettings, 'metaballLights').onChange(() => {
+      rendering.add(appSettings, 'metaballLights').onChange(() => {
         if (renderer) {
           renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
         }
       });
 
-      gui.add(appSettings, 'metaballStyle', {
+      rendering.add(appSettings, 'metaballStyle', {
         lava: 'lava',
         water: 'water',
         slime: 'slime',
@@ -129,18 +139,19 @@
           renderer.updateLightRange(appSettings.maxLightRange);
           renderer.lightManager.render = appSettings.renderLightSprites;
           renderer.setMetaballStyle(appSettings.metaballStyle);
+          renderer.setMetaballMethod(appSettings.metaballMethod);
 
           renderer.start();
+
+          const gltfLoader = new Gltf2Loader();
+          gltfLoader.loadFromUrl(appSettings.scene).then((gltf) => {
+            renderer.setScene(gltf);
+          });
         } catch (err) {
           console.error('renderer init failed', err);
           renderer.stop();
           renderer = null;
         }
-
-        const gltfLoader = new Gltf2Loader();
-        gltfLoader.loadFromUrl(appSettings.mesh).then((gltf) => {
-          renderer.setScene(gltf);
-        });
       }
       init();
 
