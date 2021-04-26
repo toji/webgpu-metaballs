@@ -362,6 +362,26 @@ const DEFAULT_VOLUME = {
 export class MarchingCubesIsosurface {
   constructor(surfaceVolume = {}) {
     this.volume = Object.assign({}, DEFAULT_VOLUME, surfaceVolume);
+    this.volume.width = Math.floor((this.volume.xMax - this.volume.xMin) / this.volume.xStep) + 1;
+    this.volume.height = Math.floor((this.volume.yMax - this.volume.yMin) / this.volume.yStep) + 1;
+    this.volume.depth = Math.floor((this.volume.zMax - this.volume.zMin) / this.volume.zStep) + 1;
+    this.volume.values = new Float32Array(this.volume.width * this.volume.height * this.volume.depth);
+  }
+
+  updateVolume(isosurface) {
+    const vol = this.volume;
+    const values = vol.values;
+    let offset = 0;
+    for (let k = 0; k < vol.depth; ++k) {
+      const z = vol.zMin + (vol.zStep * k);
+      for (let j = 0; j < vol.height; ++j) {
+        const y = vol.yMin + (vol.yStep * j);
+        for (let i = 0; i < vol.width; ++i) {
+          const x = vol.xMin + (vol.xStep * i);
+          values[offset++] = isosurface.surfaceFunc(x, y, z);
+        }
+      }
+    }
   }
 
   surfaceFunc(x, y, z) {
@@ -372,6 +392,14 @@ export class MarchingCubesIsosurface {
   normalFunc(out, x, y, z) {
     vec3.set(out, x, y, z);
     vec3.normalize(out, out);
+  }
+
+  valueAt(i, j, k) {
+    const vol = this.volume;
+    const index = i +
+                 (j * vol.width) +
+                 (k * vol.width * vol.height);
+    return vol.values[index];
   }
 
   generateMesh(arrays, threshold = 40) {
@@ -392,6 +420,8 @@ export class MarchingCubesIsosurface {
 
     const initialIndexOffset = arrays.indexOffset;
 
+    this.updateVolume(this);
+
     const val = new Float32Array(8);
     const p0 = new Float32Array(3);
     const p1 = new Float32Array(3);
@@ -407,63 +437,54 @@ export class MarchingCubesIsosurface {
     // Iterate through the full volume and evaluate the isosurface at every
     // point, then generate the triangulated surface based on that.
     const vol = this.volume;
-    for (let x = vol.xMin; x < vol.xMax; x += vol.xStep) {
-      let xNext = x + vol.xStep;
+    const values = vol.values;
+    for (let k = 0; k < vol.depth-1; ++k) {
+      const z = vol.zMin + (vol.zStep * k);
+      const z2 = z + vol.zStep;
 
-      p0[0] = x;
-      p1[0] = xNext;
-      p2[0] = xNext;
-      p3[0] = x;
-      p4[0] = x;
-      p5[0] = xNext;
-      p6[0] = xNext;
-      p7[0] = x;
+      p0[2] = z;
+      p1[2] = z;
+      p2[2] = z;
+      p3[2] = z;
+      p4[2] = z2;
+      p5[2] = z2;
+      p6[2] = z2;
+      p7[2] = z2;
 
-      for (let y = vol.yMin; y < vol.yMax; y += vol.yStep) {
-        let yNext = y + vol.yStep;
+      for (let j = 0; j < vol.height-1; ++j) {
+        const y = vol.yMin + (vol.yStep * j);
+        const y2 = y + vol.yStep;
 
         p0[1] = y;
         p1[1] = y;
-        p2[1] = yNext;
-        p3[1] = yNext;
+        p2[1] = y2;
+        p3[1] = y2;
         p4[1] = y;
         p5[1] = y;
-        p6[1] = yNext;
-        p7[1] = yNext;
+        p6[1] = y2;
+        p7[1] = y2;
 
-        // Setup the first set of Z values, since they're re-used
-        p4[2] = vol.zMin;
-        p5[2] = vol.zMin;
-        p6[2] = vol.zMin;
-        p7[2] = vol.zMin;
+        for (let i = 0; i < vol.width-1; ++i) {
+          const x = vol.xMin + (vol.xStep * i);
+          const x2 = x + vol.xStep;
+          
+          p0[0] = x;
+          p1[0] = x2;
+          p2[0] = x2;
+          p3[0] = x;
+          p4[0] = x;
+          p5[0] = x2;
+          p6[0] = x2;
+          p7[0] = x;
 
-        // These are always on the edge, so they get clamped to 0
-        // This prevents holes in the bottom of the world
-        val[4] = this.surfaceFunc(p4[0], p4[1], p4[2]);
-        val[5] = this.surfaceFunc(p5[0], p5[1], p5[2]);
-        val[6] = this.surfaceFunc(p6[0], p6[1], p6[2]);
-        val[7] = this.surfaceFunc(p7[0], p7[1], p7[2]);
-
-        for (let z = vol.zMin; z < vol.zMax; z += vol.zStep) {
-          let zNext = z + vol.zStep;
-
-          p0[2] = z;
-          p1[2] = z;
-          p2[2] = z;
-          p3[2] = z;
-          p4[2] = zNext;
-          p5[2] = zNext;
-          p6[2] = zNext;
-          p7[2] = zNext;
-
-          val[0] = val[4];
-          val[1] = val[5];
-          val[2] = val[6];
-          val[3] = val[7];
-          val[4] = this.surfaceFunc(p4[0], p4[1], p4[2]);
-          val[5] = this.surfaceFunc(p5[0], p5[1], p5[2]);
-          val[6] = this.surfaceFunc(p6[0], p6[1], p6[2]);
-          val[7] = this.surfaceFunc(p7[0], p7[1], p7[2]);
+          val[0] = this.valueAt(i, j, k);
+          val[1] = this.valueAt(i+1, j, k);
+          val[2] = this.valueAt(i+1, j+1, k);
+          val[3] = this.valueAt(i, j+1, k);
+          val[4] = this.valueAt(i, j, k+1);
+          val[5] = this.valueAt(i+1, j, k+1);
+          val[6] = this.valueAt(i+1, j+1, k+1);
+          val[7] = this.valueAt(i, j+1, k+1);
 
           if (!this.marchingCube(pt, val, threshold, arrays)) {
             // If we hit this then our output arrays have run out of room and we'll simply have to
