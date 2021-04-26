@@ -392,6 +392,11 @@ export class MarchingCubes {
       arrays.indexOffset = 0;
     }
 
+    arrays.maxVertices = Math.floor(arrays.positions.length / 3);
+    if (arrays.normals) {
+      arrays.maxVertices = Math.min(arrays.maxVertices, Math.floor(arrays.normals.length / 3));
+    }
+
     const initialIndexOffset = arrays.indexOffset;
 
     // Iterate through the full volume and evaluate the isosurface at every
@@ -421,13 +426,6 @@ export class MarchingCubes {
     const y = vol.yMin + (vol.yStep * j);
     const z = vol.zMin + (vol.zStep * k);
 
-    /* Mapping between Jaume's value ordering and mine:
-    2=>3
-    3=>2
-    6=>7
-    7=>6
-    */
-
     const values = this.valueCache;
     values[0] = this.valueAt(i, j, k);
     values[1] = this.valueAt(i+1, j, k);
@@ -456,9 +454,9 @@ export class MarchingCubes {
     if (edges === 0) {
       return true;
     }
-    // We ran out of space in the vertex buffer
+    // Will we run out of space in the vertex buffers?
     const vertCount = bitCount(edges);
-    if ((vertCount * 3) + vertexOffset >= positions.length) {
+    if (vertCount + vertexOffset >= arrays.maxVertices) {
       return false;
     }
   
@@ -589,6 +587,7 @@ export class MarchingCubes {
     }
   };
 
+  // TODO: How much difference does it make if we cache this?
   computeNormal = function(nout, offset, i, j ,k) {
     nout[offset] = this.valueAt(i-1, j, k) - this.valueAt(i+1, j, k);
     nout[offset+1] = this.valueAt(i, j-1, k) - this.valueAt(i, j+1, k);

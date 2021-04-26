@@ -63,19 +63,17 @@ export class Metaballs {
   }
 
   surfaceFunc(x, y, z) {
-    vec3.set(TMP_VEC3, x, y, z);
-
-    let result = 0;
-
     // No surfaces outside "the tube"
-    if(x*x + z*z > 1.1) {
+    /*if(x*x + z*z > 1.1) {
       return 0;
-    }
+    }*/
     // Always render geometry on the floor
     /*if (y < 0) {
       return 100;
     }*/
 
+    vec3.set(TMP_VEC3, x, y, z);
+    let result = 0;
     for (const ball of this.balls) {
       const val = ball.strength / (0.000001 + vec3.sqrDist(TMP_VEC3, ball.position)) - ball.subtract;
       if (val > 0.0) {

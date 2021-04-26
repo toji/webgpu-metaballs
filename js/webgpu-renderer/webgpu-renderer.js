@@ -49,9 +49,6 @@ const MetaballMethods = {
 const SAMPLE_COUNT = 4;
 const DEPTH_FORMAT = "depth24plus";
 
-const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
-const METABALLS_INDEX_BUFFER_SIZE = Uint16Array.BYTES_PER_ELEMENT * 16384;
-
 export class WebGPURenderer extends Renderer {
   constructor() {
     super();
@@ -302,19 +299,13 @@ export class WebGPURenderer extends Renderer {
   }
 
   setMetaballMethod(method) {
-    /*'writeBuffer()': 'writeBuffer',
-      'New staging buffer each frame': 'newMapped',
-      'Single staging buffer re-mapped each frame': 'singleMapped',
-      'Ring of staging buffers': 'ringMapped',
-      'GPU generated': 'gpuGenerated',*/
-
     const rendererConstructor = MetaballMethods[method];
     if (!rendererConstructor) {
       this.metaballRenderer = null;
       return;
     }
 
-    this.metaballRenderer = new rendererConstructor(this, METABALLS_VERTEX_BUFFER_SIZE, METABALLS_INDEX_BUFFER_SIZE);
+    this.metaballRenderer = new rendererConstructor(this);
     this.metaballsNeedUpdate = true;
   }
 

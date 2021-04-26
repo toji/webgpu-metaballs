@@ -16,13 +16,16 @@
 import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball.js';
 
+const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
+const METABALLS_INDEX_BUFFER_SIZE = Uint16Array.BYTES_PER_ELEMENT * 16384;
+
 class WebGPUMetaballRendererBase {
-  constructor(renderer, vertexBufferSize, indexBufferSize) {
+  constructor(renderer) {
     this.renderer = renderer;
     this.device = renderer.device;
 
-    this.vertexBufferSize = vertexBufferSize;
-    this.indexBufferSize = indexBufferSize;
+    this.vertexBufferSize = METABALLS_VERTEX_BUFFER_SIZE;
+    this.indexBufferSize = METABALLS_INDEX_BUFFER_SIZE;
 
     this.indexCount = 0;
 
