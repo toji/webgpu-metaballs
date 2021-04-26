@@ -20,6 +20,7 @@
 
 import { vec3, mat4 } from 'gl-matrix';
 import { Metaballs } from './metaballs.js';
+import { MarchingCubes } from './marching-cubes.js'
 
 const lightFloatCount = 8;
 const lightByteSize = lightFloatCount * 4;
@@ -144,6 +145,18 @@ export class Renderer {
     this.metaballs = new Metaballs();
     this.drawMetaballs = true;
     this.uploadMethod = null;
+
+    this.marchingCubes = new MarchingCubes({
+      xMin: -1,
+      xMax: 1,
+      xStep: 0.1,
+      yMin: -0.1,
+      yMax: 2.5,
+      yStep: 0.1,
+      zMin: -1,
+      zMax: 1,
+      zStep: 0.1,
+    });
 
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
@@ -273,9 +286,8 @@ export class Renderer {
   }
 
   updateMetaballs(timestamp) {
-    // Override with renderer-specific mesh upload logic, but be sure to call
-    // super.updateMetaballs so that the animation logic can be processed.
     this.metaballs.updateBalls(timestamp);
+    this.marchingCubes.updateVolume(this.metaballs);
 
     // Attach a light to each ball
     let lightIndex = this.sceneLightCount;

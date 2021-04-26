@@ -18,42 +18,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { MarchingCubesIsosurface } from './marching-cubes-isosurface.js'
 import { vec3 } from 'gl-matrix';
 
 const TMP_VEC3 = vec3.create();
-const TMP_VEC3_2 = vec3.create();
 
-export class Metaballs extends MarchingCubesIsosurface {
+export class Metaballs {
   constructor() {
-    const volume = {
-      xMin: -1,
-      xMax: 1,
-      xStep: 0.1,
-      yMin: -0.05,
-      yMax: 2.5,
-      yStep: 0.1,
-      zMin: -1,
-      zMax: 1,
-      zStep: 0.1,
-    };
-    super(volume);
-
     this.balls = [];
-
-    for (let i = 0; i < 10; ++i) {
-      this.addBall([
-        (Math.random() * 2.0 - 1.0) * 0.8,
-        (Math.random() * 2),
-        (Math.random() * 2.0 - 1.0) * 0.8,
-      ],
-      Math.random() * 0.5,
-      Math.random() * 0.5 + 0.5);
-    }
   }
 
   updateBalls(timestamp) {
-
     this.clearBalls();
 
     // Stolen and tweaked from https://www.clicktorelease.com/code/bumpy-metaballs/
@@ -98,9 +72,9 @@ export class Metaballs extends MarchingCubesIsosurface {
       return 0;
     }
     // Always render geometry on the floor
-    if (y < 0) {
+    /*if (y < 0) {
       return 100;
-    }
+    }*/
 
     for (const ball of this.balls) {
       const val = ball.strength / (0.000001 + vec3.sqrDist(TMP_VEC3, ball.position)) - ball.subtract;
@@ -109,31 +83,5 @@ export class Metaballs extends MarchingCubesIsosurface {
       }
     }
     return result;
-  }
-
-  normalFunc(out, x, y, z) {
-    // No surfaces outside "the tube"
-    if(x*x + z*z > 1.1) {
-      vec3.set(out, 0, 0, 0);
-      return;
-    }
-
-    vec3.set(TMP_VEC3, x, y, z);
-
-    if (y <= 0.1) {
-      // Normal of the floor is always straight up
-      vec3.set(out, 0, 1, 0);
-      return;
-    }
-
-    vec3.set(out, 0, 0, 0);
-    for (const ball of this.balls) {
-      if (vec3.dist(TMP_VEC3, ball.position) <= ball.radius) {
-        vec3.sub(TMP_VEC3_2, TMP_VEC3, ball.position);
-        vec3.normalize(TMP_VEC3_2, TMP_VEC3_2);
-        vec3.add(out, out, TMP_VEC3_2);
-      }
-    }
-    vec3.normalize(out, out);
   }
 }

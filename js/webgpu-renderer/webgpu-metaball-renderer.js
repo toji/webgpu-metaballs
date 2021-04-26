@@ -90,7 +90,7 @@ class WebGPUMetaballRendererBase {
     });
   }
 
-  update() {
+  update(marchingCubes) {
     throw new Error('update must be implemented in a class that extends WebGPUMetaballRendererBase');
   }
 
@@ -119,8 +119,8 @@ export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
     this.indexArray = new Uint16Array(this.indexBufferElements);
   }
 
-  async update(metaballs) {
-    this.indexCount = metaballs.generateMesh({
+  async update(marchingCubes) {
+    this.indexCount = marchingCubes.generateMesh({
       positions: this.vertexArray,
       normals:   this.normalArray,
       indices:   this.indexArray
@@ -137,7 +137,7 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
     super(renderer, vertexBufferSize, indexBufferSize);
   }
 
-  async update(metaballs) {
+  async update(marchingCubes) {
     const newVertexBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
       usage: GPUBufferUsage.VERTEX,
@@ -156,7 +156,7 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
       mappedAtCreation: true,
     });
 
-    this.indexCount = metaballs.generateMesh({
+    this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(newVertexBuffer.getMappedRange()),
       normals:   new Float32Array(newNormalBuffer.getMappedRange()),
       indices:   new Uint16Array(newIndexBuffer.getMappedRange())
@@ -181,7 +181,7 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
     super(renderer, vertexBufferSize, indexBufferSize);
   }
 
-  async update(metaballs) {
+  async update(marchingCubes) {
     const vertexStagingBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
       usage: GPUBufferUsage.COPY_SRC,
@@ -200,7 +200,7 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
       mappedAtCreation: true,
     });
 
-    this.indexCount = metaballs.generateMesh({
+    this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(vertexStagingBuffer.getMappedRange()),
       normals:   new Float32Array(normalStagingBuffer.getMappedRange()),
       indices:   new Uint16Array(indexStagingBuffer.getMappedRange())
@@ -247,10 +247,10 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
     this.mappedPromise = Promise.resolve();
   }
 
-  async update(metaballs) {
+  async update(marchingCubes) {
     await this.mappedPromise;
 
-    this.indexCount = metaballs.generateMesh({
+    this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(this.vertexStagingBuffer.getMappedRange()),
       normals:   new Float32Array(this.normalStagingBuffer.getMappedRange()),
       indices:   new Uint16Array(this.indexStagingBuffer.getMappedRange())
@@ -307,10 +307,10 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
     };
   }
 
-  async update(metaballs) {
+  async update(marchingCubes) {
     const stagingBuffers = this.getOrCreateStagingBuffers();
 
-    this.indexCount = metaballs.generateMesh({
+    this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(stagingBuffers.vertex.getMappedRange()),
       normals:   new Float32Array(stagingBuffers.normal.getMappedRange()),
       indices:   new Uint16Array(stagingBuffers.index.getMappedRange())

@@ -345,7 +345,7 @@ export class WebGPURenderer extends Renderer {
         return;
       }*/
 
-      await this.metaballRenderer.update(this.metaballs);
+      await this.metaballRenderer.update(this.marchingCubes);
       this.metaballsNeedUpdate = true;
     }
   }
