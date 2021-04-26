@@ -328,25 +328,6 @@ function bitCount (n) {
   return ((n + (n >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
 }
 
-function interpolate(out, offset, threshold, p1, p2, valp1, valp2) {
-  if (Math.abs(threshold-valp2) < 0.0001) {
-    out[offset] = p2[0];
-    out[offset+1] = p2[1];
-    out[offset+2] = p2[2];
-    return;
-  } else if (Math.abs(threshold-valp1) < 0.0001 || Math.abs(valp1-valp2) < 0.0001) {
-    out[offset] = p1[0];
-    out[offset+1] = p1[1];
-    out[offset+2] = p1[2];
-    return;
-  } else {
-    const mu = (threshold - valp1) / (valp2 - valp1);
-    out[offset] = p1[0] + mu * (p2[0] - p1[0]);
-    out[offset+1] = p1[1] + mu * (p2[1] - p1[1]);
-    out[offset+2] = p1[2] + mu * (p2[2] - p1[2]);
-  }
-}
-
 const DEFAULT_VOLUME = {
   xMin: -1,
   xMax: 1,
@@ -366,6 +347,8 @@ export class MarchingCubesIsosurface {
     this.volume.height = Math.floor((this.volume.yMax - this.volume.yMin) / this.volume.yStep) + 1;
     this.volume.depth = Math.floor((this.volume.zMax - this.volume.zMin) / this.volume.zStep) + 1;
     this.volume.values = new Float32Array(this.volume.width * this.volume.height * this.volume.depth);
+
+    this.valueCache = new Float32Array(8);
   }
 
   updateVolume(isosurface) {
@@ -422,71 +405,13 @@ export class MarchingCubesIsosurface {
 
     this.updateVolume(this);
 
-    const val = new Float32Array(8);
-    const p0 = new Float32Array(3);
-    const p1 = new Float32Array(3);
-    const p2 = new Float32Array(3);
-    const p3 = new Float32Array(3);
-    const p4 = new Float32Array(3);
-    const p5 = new Float32Array(3);
-    const p6 = new Float32Array(3);
-    const p7 = new Float32Array(3);
-
-    let pt = [ p0, p1, p2, p3, p4, p5, p6, p7 ];
-
     // Iterate through the full volume and evaluate the isosurface at every
     // point, then generate the triangulated surface based on that.
     const vol = this.volume;
-    const values = vol.values;
     for (let k = 0; k < vol.depth-1; ++k) {
-      const z = vol.zMin + (vol.zStep * k);
-      const z2 = z + vol.zStep;
-
-      p0[2] = z;
-      p1[2] = z;
-      p2[2] = z;
-      p3[2] = z;
-      p4[2] = z2;
-      p5[2] = z2;
-      p6[2] = z2;
-      p7[2] = z2;
-
       for (let j = 0; j < vol.height-1; ++j) {
-        const y = vol.yMin + (vol.yStep * j);
-        const y2 = y + vol.yStep;
-
-        p0[1] = y;
-        p1[1] = y;
-        p2[1] = y2;
-        p3[1] = y2;
-        p4[1] = y;
-        p5[1] = y;
-        p6[1] = y2;
-        p7[1] = y2;
-
         for (let i = 0; i < vol.width-1; ++i) {
-          const x = vol.xMin + (vol.xStep * i);
-          const x2 = x + vol.xStep;
-          
-          p0[0] = x;
-          p1[0] = x2;
-          p2[0] = x2;
-          p3[0] = x;
-          p4[0] = x;
-          p5[0] = x2;
-          p6[0] = x2;
-          p7[0] = x;
-
-          val[0] = this.valueAt(i, j, k);
-          val[1] = this.valueAt(i+1, j, k);
-          val[2] = this.valueAt(i+1, j+1, k);
-          val[3] = this.valueAt(i, j+1, k);
-          val[4] = this.valueAt(i, j, k+1);
-          val[5] = this.valueAt(i+1, j, k+1);
-          val[6] = this.valueAt(i+1, j+1, k+1);
-          val[7] = this.valueAt(i, j+1, k+1);
-
-          if (!this.marchingCube(pt, val, threshold, arrays)) {
+          if (!this.marchingCube(i, j, k, threshold, arrays)) {
             // If we hit this then our output arrays have run out of room and we'll simply have to
             // abort mid-triangulation. At least you'll get a partially computed surface out of it!
             return arrays.indexOffset - initialIndexOffset;
@@ -508,11 +433,33 @@ export class MarchingCubesIsosurface {
     normals[offset+2] = TMP_VEC3[2];
   }
 
-  marchingCube(points, values, threshold, arrays) {
+  marchingCube(i, j , k, threshold, arrays) {
     let vertexOffset = arrays.vertexOffset;
+    const vol = this.volume;
     const positions = arrays.positions;
     const normals = arrays.normals;
-  
+
+    const x = vol.xMin + (vol.xStep * i);
+    const y = vol.yMin + (vol.yStep * j);
+    const z = vol.zMin + (vol.zStep * k);
+
+    /* Mapping between Jaume's value ordering and mine:
+    2=>3
+    3=>2
+    6=>7
+    7=>6
+    */
+
+    const values = this.valueCache;
+    values[0] = this.valueAt(i, j, k);
+    values[1] = this.valueAt(i+1, j, k);
+    values[2] = this.valueAt(i+1, j+1, k);
+    values[3] = this.valueAt(i, j+1, k);
+    values[4] = this.valueAt(i, j, k+1);
+    values[5] = this.valueAt(i+1, j, k+1);
+    values[6] = this.valueAt(i+1, j+1, k+1);
+    values[7] = this.valueAt(i, j+1, k+1);
+
     // Determine the index into the edge table which tells us which vertices are
     // inside of the surface.
     let cubeIndex = 0;
@@ -524,7 +471,7 @@ export class MarchingCubesIsosurface {
     if (values[5] < threshold) cubeIndex |= 32;
     if (values[6] < threshold) cubeIndex |= 64;
     if (values[7] < threshold) cubeIndex |= 128;
-  
+
     const edges = edgeTable[cubeIndex];
   
     // Cube is entirely in/out of the surface
@@ -538,63 +485,53 @@ export class MarchingCubesIsosurface {
   
     // Generate vertices where the surface intersects the cube
     if (edges & 1) {
-      interpolate(positions, vertexOffset*3, threshold, points[0], points[1], values[0], values[1]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpX(positions, normals, vertexOffset*3, threshold, x, y, z, values[0], values[1]);
       indexList[0] = vertexOffset++;
     }
     if (edges & 2) {
-      interpolate(positions, vertexOffset*3, threshold, points[1], points[2], values[1], values[2]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpY(positions, normals, vertexOffset*3, threshold, x+vol.xStep, y, z, values[1], values[2]);
       indexList[1] = vertexOffset++;
     }
     if (edges & 4) {
-      interpolate(positions, vertexOffset*3, threshold, points[2], points[3], values[2], values[3]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpX(positions, normals, vertexOffset*3, threshold, x, y+vol.yStep, z, values[3], values[2]);
       indexList[2] = vertexOffset++;
     }
     if (edges & 8) {
-      interpolate(positions, vertexOffset*3, threshold, points[3], points[0], values[3], values[0]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpY(positions, normals, vertexOffset*3, threshold, x, y, z, values[0], values[3]);
       indexList[3] = vertexOffset++;
     }
+
     if (edges & 16) {
-      interpolate(positions, vertexOffset*3, threshold, points[4], points[5], values[4], values[5]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpX(positions, normals, vertexOffset*3, threshold, x, y, z+vol.zStep, values[4], values[5]);
       indexList[4] = vertexOffset++;
     }
     if (edges & 32) {
-      interpolate(positions, vertexOffset*3, threshold, points[5], points[6], values[5], values[6]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpY(positions, normals, vertexOffset*3, threshold, x+vol.xStep, y, z+vol.zStep, values[5], values[6]);
       indexList[5] = vertexOffset++;
     }
     if (edges & 64) {
-      interpolate(positions, vertexOffset*3, threshold, points[7], points[6], values[7], values[6]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpX(positions, normals, vertexOffset*3, threshold, x, y+vol.yStep, z+vol.zStep, values[7], values[6]);
       indexList[6] = vertexOffset++;
     }
     if (edges & 128) {
-      interpolate(positions, vertexOffset*3, threshold, points[7], points[4], values[7], values[4]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpY(positions, normals, vertexOffset*3, threshold, x, y, z+vol.zStep, values[4], values[7]);
       indexList[7] = vertexOffset++;
     }
+
     if (edges & 256) {
-      interpolate(positions, vertexOffset*3, threshold, points[0], points[4], values[0], values[4]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpZ(positions, normals, vertexOffset*3, threshold, x, y, z, values[0], values[4]);
       indexList[8] = vertexOffset++;
     }
     if (edges & 512) {
-      interpolate(positions, vertexOffset*3, threshold, points[1], points[5], values[1], values[5]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpZ(positions, normals, vertexOffset*3, threshold, x+vol.xStep, y, z, values[1], values[5]);
       indexList[9] = vertexOffset++;
     }
     if (edges & 1024) {
-      interpolate(positions, vertexOffset*3, threshold, points[2], points[6], values[2], values[6]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpZ(positions, normals, vertexOffset*3, threshold, x+vol.xStep, y+vol.yStep, z, values[2], values[6]);
       indexList[10] = vertexOffset++;
     }
     if (edges & 2048) {
-      interpolate(positions, vertexOffset*3, threshold, points[3], points[7], values[3], values[7]);
-      this.getNormal(positions, normals, vertexOffset*3);
+      this.interpZ(positions, normals, vertexOffset*3, threshold, x, y+vol.yStep, z, values[3], values[7]);
       indexList[11] = vertexOffset++;
     }
   
@@ -603,9 +540,9 @@ export class MarchingCubesIsosurface {
     // Record the triangle indices
     let triTableOffset = cubeIndex <<= 4;
     while (triTable[triTableOffset] != -1 && (arrays.indexOffset + 3 < arrays.indices.length)) {
-      let i0 = triTable[triTableOffset++];
-      let i1 = triTable[triTableOffset++];
-      let i2 = triTable[triTableOffset++];
+      const i0 = triTable[triTableOffset++];
+      const i1 = triTable[triTableOffset++];
+      const i2 = triTable[triTableOffset++];
       arrays.indices[arrays.indexOffset++] = indexList[i0];
       arrays.indices[arrays.indexOffset++] = indexList[i1];
       arrays.indices[arrays.indexOffset++] = indexList[i2];
@@ -618,4 +555,49 @@ export class MarchingCubesIsosurface {
   
     return true;
   }
+
+  interpX(out, nout, offset, threshold, x, y, z, valp1, valp2, q) {
+    const mu = (threshold - valp1) / (valp2 - valp1);
+    out[offset] = x + mu * this.volume.xStep;
+    out[offset+1] = y;
+    out[offset+2] = z;
+
+    this.getNormal(out, nout, offset);
+  
+    /*const nc = this.normal_cache;
+    nout[offset] = this.lerp(nc[q], nc[q + 3], mu);
+    nout[offset + 1] = this.lerp(nc[q + 1], nc[q + 4], mu);
+    nout[offset + 2] = this.lerp(nc[q + 2], nc[q + 5], mu);*/
+  
+  };
+  
+  interpY(out, nout, offset, threshold, x, y, z, valp1, valp2, q) {
+    const mu = (threshold - valp1) / (valp2 - valp1);
+    out[offset] = x;
+    out[offset+1] = y + mu * this.volume.yStep;
+    out[offset+2] = z;
+
+    this.getNormal(out, nout, offset);
+  
+    /*const nc = this.normal_cache;
+    var q2 = q + this.yd * 3;
+    nout[offset] = this.lerp(nc[q], nc[q2], mu);
+    nout[offset + 1] = this.lerp(nc[q + 1], nc[q2 + 1], mu);
+    nout[offset + 2] = this.lerp(nc[q + 2], nc[q2 + 2], mu);*/
+  };
+  
+  interpZ(out, nout, offset, threshold, x, y, z, valp1, valp2, q) {
+    const mu = (threshold - valp1) / (valp2 - valp1);
+    out[offset] = x;
+    out[offset+1] = y;
+    out[offset+2] = z + mu * this.volume.zStep;
+
+    this.getNormal(out, nout, offset);
+    
+    /*const nc = this.normal_cache;
+    const q2 = q + this.zd * 3;
+    nout[offset] = this.lerp(nc[q], nc[q2], mu);
+    nout[offset + 1] = this.lerp(nc[q + 1], nc[q2 + 1], mu);
+    nout[offset + 2] = this.lerp(nc[q + 2], nc[q2 + 2], mu);*/
+  };
 }
