@@ -28,6 +28,8 @@ import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
 
+import { GPUStats } from './gpu-stats.js';
+
 import {
   MetaballWriteBuffer,
   MetaballNewBuffer,
@@ -58,6 +60,8 @@ export class WebGPURenderer extends Renderer {
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('gpupresent');
+
+    this.gpuStats = new GPUStats();
   }
 
   async init() {
@@ -347,6 +351,8 @@ export class WebGPURenderer extends Renderer {
   }
 
   onFrame(timestamp) {
+    this.gpuStats.begin();
+
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
     this.colorAttachment.resolveTarget = this.swapChain.getCurrentTexture().createView();
@@ -380,5 +386,7 @@ export class WebGPURenderer extends Renderer {
 
     passEncoder.endPass();
     this.device.queue.submit([commandEncoder.finish()]);
+
+    this.gpuStats.end();
   }
 }

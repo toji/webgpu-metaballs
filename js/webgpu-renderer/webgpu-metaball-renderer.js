@@ -16,94 +16,6 @@
 import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball.js';
 
-const MAX_QUERY_COUNT = 1024;
-
-class GPUTiming {
-  constructor(device) {
-    this.device = device;
-    this.hasFeature = false; //device.features.has('timestamp-query');
-    this.nextIndex = 0;
-
-    if (!this.hasFeature) {
-      console.warn('GPUDevice was not created with the "timestamp-query" feature');
-      return;
-    }
-
-    this.querySet = device.createQuerySet({
-      type: 'timestamp',
-      count: MAX_QUERY_COUNT
-    });
-
-    this.queryResultBuffer = device.createBuffer({
-      size: MAX_QUERY_COUNT * 8,
-      usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.QUERY_RESOLVE
-    });
-
-    this.queryReadBuffer = device.createBuffer({
-      size: MAX_QUERY_COUNT * 8,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
-    });
-  }
-
-  begin(encoder) {
-    if (!this.hasFeature) { return; }
-
-    if (this.nextIndex % 2 != 0) {
-      throw new Error('Mismatched timer query begin/end');
-    }
-    encoder.writeTimestamp(this.querySet, this.nextIndex++);
-  }
-
-  end(encoder) {
-    if (!this.hasFeature) { return; }
-
-    if (this.nextIndex % 2 != 1) {
-      throw new Error('Mismatched timer query begin/end');
-    }
-    encoder.writeTimestamp(this.querySet, this.nextIndex++);
-  }
-
-  report(label = '') {
-    if (!this.hasFeature) { return; }
-
-    if (this.nextIndex < 120) {
-      return;
-    }
-
-    const resultCount = this.nextIndex;
-    this.nextIndex = 0;
-
-    const commandEncoder = this.device.createCommandEncoder({});
-    commandEncoder.writeTimestamp(this.querySet, 1);
-    commandEncoder.resolveQuerySet(this.querySet, 0, resultCount, this.queryResultBuffer, 0);
-    commandEncoder.copyBufferToBuffer(this.queryResultBuffer, 0, this.queryReadBuffer, 0, resultCount*8);
-    this.device.queue.submit([commandEncoder.finish()]);
-
-    this.queryReadBuffer.mapAsync(GPUMapMode.READ).then(() => {
-      const timestamps = new BigUint64Array(this.queryReadBuffer.getMappedRange());
-      let total = 0;
-      let readings = 0;
-      for(let i = 0; i < resultCount; i+=2) {
-        const start = timestamps[i];
-        const end = timestamps[i+1];
-        if (start == 0n || end == 0n) {
-          break;
-        }
-        if (start > end) {
-          continue;
-        }
-        total += Number(end - start) / 1000000.0; // Convert to ms
-        readings++;
-      }
-      if (readings > 0) {
-        const avg = total / readings;
-        console.log(`Query Timing Avg (${label}): ${avg} ms`);
-      }
-      this.queryReadBuffer.unmap();
-    });
-  }
-}
-
 class WebGPUMetaballRendererBase {
   constructor(renderer, vertexBufferSize, indexBufferSize) {
     this.renderer = renderer;
@@ -113,8 +25,6 @@ class WebGPUMetaballRendererBase {
     this.indexBufferSize = indexBufferSize;
 
     this.indexCount = 0;
-
-    this.timing = new GPUTiming(this.device);
 
     // Metaball resources
     this.vertexBuffer = this.device.createBuffer({
@@ -301,14 +211,10 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
     indexStagingBuffer.unmap();
 
     const commandEncoder = this.device.createCommandEncoder({});
-    this.timing.begin(commandEncoder);
     commandEncoder.copyBufferToBuffer(vertexStagingBuffer, 0, this.vertexBuffer, 0, this.vertexBufferSize);
     commandEncoder.copyBufferToBuffer(normalStagingBuffer, 0, this.normalBuffer, 0, this.vertexBufferSize);
     commandEncoder.copyBufferToBuffer(indexStagingBuffer, 0, this.indexBuffer, 0, this.indexBufferSize);
-    this.timing.end(commandEncoder);
     this.device.queue.submit([commandEncoder.finish()]);
-
-    this.timing.report('New Staging Buffer');
 
     vertexStagingBuffer.destroy();
     normalStagingBuffer.destroy();
@@ -355,14 +261,10 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
     this.indexStagingBuffer.unmap();
 
     const commandEncoder = this.device.createCommandEncoder({});
-    this.timing.begin(commandEncoder);
     commandEncoder.copyBufferToBuffer(this.vertexStagingBuffer, 0, this.vertexBuffer, 0, this.vertexBufferSize);
     commandEncoder.copyBufferToBuffer(this.normalStagingBuffer, 0, this.normalBuffer, 0, this.vertexBufferSize);
     commandEncoder.copyBufferToBuffer(this.indexStagingBuffer, 0, this.indexBuffer, 0, this.indexBufferSize);
-    this.timing.end(commandEncoder);
     this.device.queue.submit([commandEncoder.finish()]);
-
-    this.timing.report('Single Staging Buffer');
 
     this.mappedPromise = Promise.all([
       this.vertexStagingBuffer.mapAsync(GPUMapMode.WRITE),
@@ -419,14 +321,10 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
     stagingBuffers.index.unmap();
 
     const commandEncoder = this.device.createCommandEncoder({});
-    this.timing.begin(commandEncoder);
     commandEncoder.copyBufferToBuffer(stagingBuffers.vertex, 0, this.vertexBuffer, 0, this.vertexBufferSize);
     commandEncoder.copyBufferToBuffer(stagingBuffers.normal, 0, this.normalBuffer, 0, this.vertexBufferSize);
     commandEncoder.copyBufferToBuffer(stagingBuffers.index, 0, this.indexBuffer, 0, this.indexBufferSize);
-    this.timing.end(commandEncoder);
     this.device.queue.submit([commandEncoder.finish()]);
-
-    this.timing.report('Staging Ring');
 
     Promise.all([
       stagingBuffers.vertex.mapAsync(GPUMapMode.WRITE),
