@@ -176,3 +176,166 @@ export class FlyingCamera {
     }
   }
 }
+
+export class OrbitCamera {
+  constructor() {
+    this._element = null;
+
+    this._distance = vec3.create([0, 0, 5]);
+    this._target = vec3.create();
+    this._viewMat = mat4.create();
+    this._cameraMat = mat4.create();
+    this._position = vec3.create();
+
+    this.orbitX = 0;
+    this.orbitY = 0;
+    this.maxOrbitX = Math.PI * 0.5;
+    this.minOrbitX = -Math.PI * 0.5;
+    this.maxOrbitY = Math.PI;
+    this.minOrbitY = -Math.PI;
+    this.constrainXOrbit = true;
+    this.constrainYOrbit = false;
+    
+    this.maxDistance = 10;
+    this.minDistance = 1;
+    this.distanceStep = 0.005;
+    this.constrainDistance = true;
+
+    this._dirty = true;
+
+    let moving = false;
+    let lastX, lastY;
+    this.mousedownCallback = (event) => {
+      if (event.isPrimary) {
+        moving = true;
+      }
+      lastX = event.pageX;
+      lastY = event.pageY;
+    };
+    this.mousemoveCallback = (event) => {
+      let xDelta, yDelta;
+
+      if(document.pointerLockEnabled) {
+          xDelta = event.movementX;
+          yDelta = event.movementY;
+          this.orbit(xDelta * 0.025, yDelta * 0.025);
+      } else if (moving) {
+          xDelta = event.pageX - lastX;
+          yDelta = event.pageY - lastY;
+          lastX = event.pageX;
+          lastY = event.pageY;
+          this.orbit(xDelta * 0.025, yDelta * 0.025);
+      }
+    };
+    this.mouseupCallback = (event) => {
+      if (event.isPrimary) {
+        moving = false;
+      }
+    };
+    this.mousewheelCallback = (event) => {
+      this.distance = -this._distance[2] + (-event.wheelDeltaY * this.distanceStep);
+      event.preventDefault();
+    };
+  }
+
+  set element(value) {
+    if (this._element && this._element != value) {
+      this._element.removeEventListener('pointerdown', this.mousedownCallback);
+      this._element.removeEventListener('pointermove', this.mousemoveCallback);
+      this._element.removeEventListener('pointerup', this.mouseupCallback);
+      this._element.removeEventListener('mousewheel', this.mousewheelCallback);
+    }
+
+    this._element = value;
+    if (this._element) {
+      this._element.addEventListener('pointerdown', this.mousedownCallback);
+      this._element.addEventListener('pointermove', this.mousemoveCallback);
+      this._element.addEventListener('pointerup', this.mouseupCallback);
+      this._element.addEventListener('mousewheel', this.mousewheelCallback);
+    }
+  }
+
+  get element() {
+    return this._element;
+  }
+
+  orbit(xDelta, yDelta) {
+    if(xDelta || yDelta) {
+      this.orbitY += xDelta;
+      if(this.constrainYOrbit) {
+          this.orbitY = Math.min(Math.max(this.orbitY, this.minOrbitY), this.maxOrbitY);
+      } else {
+          while (this.orbitY < -Math.PI) {
+              this.orbitY += Math.PI * 2;
+          }
+          while (this.orbitY >= Math.PI) {
+              this.orbitY -= Math.PI * 2;
+          }
+      }
+
+      this.orbitX += yDelta;
+      if(this.constrainXOrbit) {
+          this.orbitX = Math.min(Math.max(this.orbitX, this.minOrbitX), this.maxOrbitX);
+      } else {
+          while (this.orbitX < -Math.PI) {
+              this.orbitX += Math.PI * 2;
+          }
+          while (this.orbitX >= Math.PI) {
+              this.orbitX -= Math.PI * 2;
+          }
+      }
+
+      this._dirty = true;
+    }
+  }
+
+  get target() {
+    return [this._target[0], this._target[1], this._target[2]];
+  }
+
+  set target(value) {
+    this._target[0] = value[0];
+    this._target[1] = value[1];
+    this._target[2] = value[2];
+    this._dirty = true;
+  };
+
+  get distance() {
+    return -this._distance[2];
+  };
+
+  set distance(value) {
+    this._distance[2] = value;
+    if(this.constrainDistance) {
+      this._distance[2] = Math.min(Math.max(this._distance[2], this.minDistance), this.maxDistance);
+    }
+    this._dirty = true;
+  };
+
+  updateMatrices() {
+    if (this._dirty) {
+      var mv = this._cameraMat;
+      mat4.identity(mv);
+
+      mat4.translate(mv, mv, this._target);
+      mat4.rotateY(mv, mv, -this.orbitY);
+      mat4.rotateX(mv, mv, -this.orbitX);
+      mat4.translate(mv, mv, this._distance);
+      mat4.invert(this._viewMat, this._cameraMat);
+
+      this._dirty = false;
+    }
+  }
+
+  get position() {
+    this.updateMatrices();
+    vec3.set(this._position, 0, 0, 0);
+    vec3.transformMat4(this._position, this._position, this._cameraMat);
+    return this._position;
+  }
+
+  get viewMatrix() {
+    this.updateMatrices();
+    return this._viewMat;
+  }
+}

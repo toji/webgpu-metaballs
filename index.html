@@ -54,7 +54,7 @@
       import Stats from 'stats.js';
 
       import { Gltf2Loader } from './js/mini-gltf2.js';
-      import { FlyingCamera } from './js/camera.js';
+      import { OrbitCamera } from './js/camera.js';
 
       import { WebGPURenderer } from './js/webgpu-renderer/webgpu-renderer.js';
 
@@ -64,9 +64,11 @@
       const stats = new Stats();
       document.body.appendChild(stats.dom);
 
-      const camera = new FlyingCamera();
-      camera.position = [0, 1.5, 3];
-      //camera.rotateView(-Math.PI * 0.5, 0);
+      const camera = new OrbitCamera();
+      camera.target = [0, 1, 0]; // TODO: This seems swizzled
+      camera.distance = 2.5;
+      camera.orbitX = Math.PI * 0.1;
+      camera.minOrbitX = Math.PI * -0.1;
 
       const appSettings = {
         scene: './media/models/dungeon/dungeon.glb',
