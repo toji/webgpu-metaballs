@@ -19,6 +19,7 @@ import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball
 const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
 const METABALLS_INDEX_BUFFER_SIZE = Uint16Array.BYTES_PER_ELEMENT * 16384;
 
+// Common assets used by every variant of the Metaball renderer
 class WebGPUMetaballRendererBase {
   constructor(renderer) {
     this.renderer = renderer;
@@ -110,6 +111,25 @@ class WebGPUMetaballRendererBase {
   }
 }
 
+//
+// writeBuffer()
+//
+
+/**
+ * This path uses queue.writeBuffer() to update the vertex and index buffers every frame.
+ * writeBuffer() is a convenice function that copies from an ArrayBuffer into a GPUBuffer in
+ * whatever way the user agent deems best. In many scenarios this can be one of the most efficent
+ * routes.
+ * 
+ * Advantages:
+ *  - Lowest overall complexity.
+ *  - If your data is already in an ArrayBuffer, this will handle the copy for you.
+ *  - TODO
+ * 
+ * Disadvantages:
+ *  - Requires a GPU-side copy
+ *  - TODO
+ */
 export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
   constructor(renderer, vertexBufferSize, indexBufferSize) {
     super(renderer, vertexBufferSize, indexBufferSize);
@@ -135,6 +155,30 @@ export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
   }
 }
 
+//
+// Created a new buffer that is mappedAtCreation each time.
+//
+
+/**
+ * This path creates a new set of buffers each time the data needs to be updated with
+ * mappedAtCreation set to true. This allows the buffer's data to immediately be populated, even
+ * for buffers that don't have MAP or COPY usage specified. However, this method only allows the
+ * buffer's data to be set once, and if the data is changed either a new buffer will need to be
+ * created or one of the other techniques, in conjunction with the appropriate usage flags, will
+ * need to be used to update the buffer. As such this technique is best for buffers that will never
+ * change or changes very infrequently.
+ * 
+ * Advantages:
+ *  - Can set the buffer data immediately.
+ *  - No specific usage flags required.
+ *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
+ * 
+ * Disadvantages:
+ *  - Only works for newly created buffers.
+ *  - If buffer data changes frequently results in lots of buffer creation and destruction.
+ *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
+ *  - Requires a GPU-side copy
+ */
 export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
   constructor(renderer, vertexBufferSize, indexBufferSize) {
     super(renderer, vertexBufferSize, indexBufferSize);
@@ -179,6 +223,28 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
   }
 }
 
+//
+// Created a new staging buffer that is mappedAtCreation each time.
+//
+
+/**
+ * This path is similar to the previous one, but uses a single set of vertex/index buffers and 
+ * creates a new set of staging buffers with mappedAtCreation set to true to copy from each time the
+ * data needs to be updated. This allows the staging buffer's data to immediately be populated,
+ * though the data still needs to be copied from the staging buffer into the vertex/index buffers
+ * once the staging buffer is unmapped. This method only uses each staging buffer once, and if the
+ * data is changed a new staging buffer is created. As such this technique is best for buffers that
+ * changes infrequently.
+ * 
+ * Advantages:
+ *  - Can set the buffer data immediately.
+ *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
+ * 
+ * Disadvantages:
+ *  - If buffer data changes frequently results in lots of staging buffer creation and destruction.
+ *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
+ *  - Requires a GPU-side copy
+ */
 export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
   constructor(renderer, vertexBufferSize, indexBufferSize) {
     super(renderer, vertexBufferSize, indexBufferSize);
@@ -225,6 +291,29 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
   }
 }
 
+//
+// Reusing a single staging buffer.
+//
+
+/**
+ * This path uses a single set of staging buffers and a single set of vertex/index buffers. Each
+ * time the data is updated the staging buffer is immedately re-mapped, and when it's time to update
+ * the buffer again the application waits for the mapping to complete before writing the data.
+ * This tightly controls the total amount of memory used to update the buffer, but can result in
+ * stalls if the data needs to be updated before the staging buffer has finished mapping again.
+ * As such this technique is best for buffers that change with moderate frequency, such as every
+ * few frames.
+ * 
+ * Advantages:
+ *  - Well bounded memory usage.
+ *  - No ongoing creation/destruction overhead.
+ *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
+ *
+ * Disadvantages:
+ *  - Need to wait for staging buffer to be mapped each time buffer is updated.
+ *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
+ *  - Requires a GPU-side copy
+ */
 export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
   constructor(renderer, vertexBufferSize, indexBufferSize) {
     super(renderer, vertexBufferSize, indexBufferSize);
@@ -277,6 +366,31 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
   }
 }
 
+//
+// Staging buffer ring.
+//
+
+/**
+ * This path uses a rotating set of staging buffers and a single set of vertex/index buffers. Each
+ * time the data is updated it first checks to see if a previously used staging buffer is already
+ * mapped and ready to use, and if so writes the data into that. If not, a new staging buffer is
+ * created with mappedAtCreation set to true so that it can immedately be populated. After the data
+ * is copied GPU-side the staging buffer is immedately mapped again, and once the mapping is
+ * complete it's placed in the queue of buffers which are ready for use. If the buffer data is
+ * updated frequently this typically results in a list of 2-3 staging buffers that are cycled
+ * through. This technique is best for buffers that change very frequency, such as every frame.
+ * 
+ * Advantages:
+ *  - Limits buffer creation.
+ *  - Doesn't wait on previously used buffers to be mapped.
+ *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
+ *
+ * Disadvantages:
+ *  - Higher complexity than other methods.
+ *  - Higher ongoing memory usage.
+ *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
+ *  - Requires a GPU-side copy
+ */
 export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
   constructor(renderer, vertexBufferSize, indexBufferSize) {
     super(renderer, vertexBufferSize, indexBufferSize);
@@ -338,3 +452,25 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
     });
   }
 }
+
+//
+// TODO: Populate buffer in a Compute shader
+//
+
+/**
+ * For certain types of algorithmically generated data, it may be possible to generate the data in
+ * a compute shader. This allows the data to be directly populated into the GPU-side buffer with
+ * no copies, and as a result can be the most efficent route. Not every data set is well suited for
+ * generation within a compute shader, however, and as such this method is only practical for data
+ * which is algorithmically generated (for example: particle effects).
+ * 
+ * Advantages:
+ *  - Does not require staging buffers.
+ *  - No CPU or GPU-side copies.
+ *  - Takes advantage of GPU hardware, parallelism.
+ *
+ * Disadvantages:
+ *  - Potentially very high complexity.
+ *  - Not all algorithms are well suited for implementation as a compute shader.
+ *  - May still require copy of external data for use in the shader.
+ */
