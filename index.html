@@ -1,0 +1,162 @@
+<!doctype html>
+
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1, user-scalable=no'>
+    <meta name='mobile-web-app-capable' content='yes'>
+    <meta name='apple-mobile-web-app-capable' content='yes'>
+
+    <title>WebGPU Metaballs</title>
+
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        background-color: #000000;
+      }
+
+      canvas {
+        position: absolute;
+        z-index: 0;
+        height: 100%;
+        width: 100%;
+        left: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        margin: 0;
+        touch-action: none;
+      }
+
+      .dg.main {
+        position: absolute;
+        z-index: 100;
+        top: 1em;
+        right: 1em;
+      }
+    </style>
+  </head>
+  <body>
+    <script type="importmap">
+    {
+        "imports": {
+            "gl-matrix": "./node_modules/gl-matrix/dist/esm/index.js",
+            "webgl-texture-loader": "./node_modules/web-texture-tool/build/webgl-texture-loader.js",
+            "webgpu-texture-loader": "./node_modules/web-texture-tool/build/webgpu-texture-loader.js",
+            "dat.gui": "./node_modules/dat.gui/build/dat.gui.module.js",
+            "stats.js": "./node_modules/stats.js/src/Stats.js"
+        }
+    }
+    </script>
+    <script type="module">
+      import dat from 'dat.gui';
+      import Stats from 'stats.js';
+
+      import { Gltf2Loader } from './js/mini-gltf2.js';
+      import { OrbitCamera } from './js/camera.js';
+
+      import { WebGPURenderer } from './js/webgpu-renderer/webgpu-renderer.js';
+
+      let renderer = null;
+      let gltf = null;
+
+      const stats = new Stats();
+      document.body.appendChild(stats.dom);
+
+      const camera = new OrbitCamera();
+      camera.target = [0, 1, 0]; // TODO: This seems swizzled
+      camera.distance = 2.5;
+      camera.orbitX = Math.PI * 0.1;
+      camera.minOrbitX = Math.PI * -0.1;
+
+      const appSettings = {
+        scene: './media/models/dungeon/dungeon.glb',
+        metaballMethod: 'newBuffer',
+        renderLightSprites: true,
+        sceneLights: true,
+        metaballLights: true,
+        metaballStyle: 'lava',
+      };
+
+      let gui = new dat.GUI();
+
+      gui.add(appSettings, 'metaballMethod', {
+        'writeBuffer()': 'writeBuffer',
+        'New buffer each frame': 'newBuffer',
+        'New staging buffer each frame': 'newStaging',
+        'Single staging buffer re-mapped each frame': 'singleStaging',
+        'Ring of staging buffers': 'stagingRing',
+        //'GPU generated': 'gpuGenerated',
+      }).onChange(() => {
+        if (renderer) {
+          renderer.setMetaballMethod(appSettings.metaballMethod);
+        }
+      });
+
+      let rendering = gui.addFolder('Rendering');
+
+      rendering.add(appSettings, 'renderLightSprites').onChange(() => {
+        if (renderer) {
+          renderer.lightManager.render = appSettings.renderLightSprites;
+        }
+      });
+
+      rendering.add(appSettings, 'sceneLights').onChange(() => {
+        if (renderer) {
+          renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
+        }
+      });
+
+      rendering.add(appSettings, 'metaballLights').onChange(() => {
+        if (renderer) {
+          renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
+        }
+      });
+
+      rendering.add(appSettings, 'metaballStyle', {
+        lava: 'lava',
+        water: 'water',
+        slime: 'slime',
+        none: 'none',
+      }).onChange(() => {
+        renderer.setMetaballStyle(appSettings.metaballStyle);
+      });
+
+      document.body.appendChild(gui.domElement);
+
+      async function init() {
+        renderer = new WebGPURenderer();
+
+        try {
+          await renderer.init();
+          renderer.setStats(stats);
+          if (gltf) {
+            await renderer.setScene(gltf);
+          }
+          renderer.camera = camera;
+          document.body.appendChild(renderer.canvas);
+          camera.element = renderer.canvas;
+          renderer.lightManager.lightCount = appSettings.lightCount;
+          renderer.updateLightRange(appSettings.maxLightRange);
+          renderer.lightManager.render = appSettings.renderLightSprites;
+          renderer.setMetaballStyle(appSettings.metaballStyle);
+          renderer.setMetaballMethod(appSettings.metaballMethod);
+
+          renderer.start();
+
+          const gltfLoader = new Gltf2Loader();
+          gltfLoader.loadFromUrl(appSettings.scene).then((gltf) => {
+            renderer.setScene(gltf);
+          });
+        } catch (err) {
+          console.error('renderer init failed', err);
+          renderer.stop();
+          renderer = null;
+        }
+      }
+      init();
+
+    </script>
+  </body>
+</html>
