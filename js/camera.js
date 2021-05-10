@@ -233,7 +233,7 @@ export class OrbitCamera {
       }
     };
     this.mousewheelCallback = (event) => {
-      this.distance = -this._distance[2] + (-event.wheelDeltaY * this.distanceStep);
+      this.distance = this._distance[2] + (-event.wheelDeltaY * this.distanceStep);
       event.preventDefault();
     };
   }
