@@ -14,14 +14,14 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
-import { MetaballVertexSource, MetaballFragmentSource } from './shaders/metaball.js';
+import { MetaballVertexSource, MetaballFragmentSource, MarchingCubesComputeSource } from './shaders/metaball.js';
 
 const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
 const METABALLS_INDEX_BUFFER_SIZE = Uint16Array.BYTES_PER_ELEMENT * 16384;
 
 // Common assets used by every variant of the Metaball renderer
 class WebGPUMetaballRendererBase {
-  constructor(renderer) {
+  constructor(renderer, createBuffers=true) {
     this.renderer = renderer;
     this.device = renderer.device;
 
@@ -31,20 +31,22 @@ class WebGPUMetaballRendererBase {
     this.indexCount = 0;
 
     // Metaball resources
-    this.vertexBuffer = this.device.createBuffer({
-      size: this.vertexBufferSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-    });
+    if (createBuffers) {
+      this.vertexBuffer = this.device.createBuffer({
+        size: this.vertexBufferSize,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+      });
 
-    this.normalBuffer = this.device.createBuffer({
-      size: this.vertexBufferSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
-    });
+      this.normalBuffer = this.device.createBuffer({
+        size: this.vertexBufferSize,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.VERTEX,
+      });
 
-    this.indexBuffer = this.device.createBuffer({
-      size: this.indexBufferSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
-    });
+      this.indexBuffer = this.device.createBuffer({
+        size: this.indexBufferSize,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.INDEX,
+      });
+    }
 
     this.pipeline = this.device.createRenderPipeline({
       layout: this.device.createPipelineLayout({
@@ -124,15 +126,19 @@ class WebGPUMetaballRendererBase {
  * Advantages:
  *  - Lowest overall complexity.
  *  - If your data is already in an ArrayBuffer, this will handle the copy for you.
- *  - TODO
+ *  - Potentially best for WASM apps, which need to perform an additional copy from the WASM heap
+ *    when using mapped buffers anyway.
+ *  - Avoids the need to set the contents of a mapped buffer's array to zero before returning it.
+ *  - Allows the user agent to pick an optimal pattern for uploading the data to the GPU.
  * 
  * Disadvantages:
+ *  - Requires a CPU-side copy
  *  - Requires a GPU-side copy
  *  - TODO
  */
 export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer, vertexBufferSize, indexBufferSize) {
-    super(renderer, vertexBufferSize, indexBufferSize);
+  constructor(renderer) {
+    super(renderer);
 
     this.vertexBufferElements = this.vertexBufferSize / Float32Array.BYTES_PER_ELEMENT;
     this.indexBufferElements = this.indexBufferSize / Uint16Array.BYTES_PER_ELEMENT
@@ -165,7 +171,7 @@ export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
  * for buffers that don't have MAP or COPY usage specified. However, this method only allows the
  * buffer's data to be set once, and if the data is changed either a new buffer will need to be
  * created or one of the other techniques, in conjunction with the appropriate usage flags, will
- * need to be used to update the buffer. As such this technique is best for buffers that will never
+ * need to be used to update the buffer. As such this technique is good for buffers that will never
  * change or changes very infrequently.
  * 
  * Advantages:
@@ -176,12 +182,13 @@ export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
  * Disadvantages:
  *  - Only works for newly created buffers.
  *  - If buffer data changes frequently results in lots of buffer creation and destruction.
+ *  - User agent must zero out the buffer when it's mapped.
  *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
  *  - Requires a GPU-side copy
  */
 export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer, vertexBufferSize, indexBufferSize) {
-    super(renderer, vertexBufferSize, indexBufferSize);
+  constructor(renderer) {
+    super(renderer, false);
   }
 
   async update(marchingCubes) {
@@ -213,9 +220,11 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
     newNormalBuffer.unmap();
     newIndexBuffer.unmap();
 
-    this.vertexBuffer.destroy();
-    this.normalBuffer.destroy();
-    this.indexBuffer.destroy();
+    if (this.vertexBuffer) {
+      this.vertexBuffer.destroy();
+      this.normalBuffer.destroy();
+      this.indexBuffer.destroy();
+    }
 
     this.vertexBuffer = newVertexBuffer;
     this.normalBuffer = newNormalBuffer;
@@ -242,14 +251,11 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
  * 
  * Disadvantages:
  *  - If buffer data changes frequently results in lots of staging buffer creation and destruction.
+ *  - User agent must zero out the staging buffer when it's mapped.
  *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
  *  - Requires a GPU-side copy
  */
 export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer, vertexBufferSize, indexBufferSize) {
-    super(renderer, vertexBufferSize, indexBufferSize);
-  }
-
   async update(marchingCubes) {
     const vertexStagingBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
@@ -307,16 +313,18 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
  * Advantages:
  *  - Well bounded memory usage.
  *  - No ongoing creation/destruction overhead.
+ *  - Staging buffer re-use means initialization costs are only paid once.
  *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
  *
  * Disadvantages:
  *  - Need to wait for staging buffer to be mapped each time buffer is updated.
+ *  - User agent must zero out the staging buffer the first time it's mapped.
  *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
  *  - Requires a GPU-side copy
  */
 export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer, vertexBufferSize, indexBufferSize) {
-    super(renderer, vertexBufferSize, indexBufferSize);
+  constructor(renderer) {
+    super(renderer);
 
     this.vertexStagingBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
@@ -383,17 +391,19 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
  * Advantages:
  *  - Limits buffer creation.
  *  - Doesn't wait on previously used buffers to be mapped.
+ *  - Staging buffer re-use means initialization costs are only paid once per set.
  *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
  *
  * Disadvantages:
  *  - Higher complexity than other methods.
  *  - Higher ongoing memory usage.
+ *  - User agent must zero out the staging buffers the first time they are mapped.
  *  - If data is already in an ArrayBuffer, requires another CPU-side copy.
  *  - Requires a GPU-side copy
  */
 export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
-  constructor(renderer, vertexBufferSize, indexBufferSize) {
-    super(renderer, vertexBufferSize, indexBufferSize);
+  constructor(renderer) {
+    super(renderer);
 
     this.readyBuffers = [];
   }
@@ -470,7 +480,38 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
  *  - Takes advantage of GPU hardware, parallelism.
  *
  * Disadvantages:
- *  - Potentially very high complexity.
+ *  - Potentially high complexity.
  *  - Not all algorithms are well suited for implementation as a compute shader.
  *  - May still require copy of external data for use in the shader.
  */
+
+export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
+  constructor(renderer) {
+    super(renderer, false);
+
+    // Metaball resources
+    this.vertexBuffer = this.device.createBuffer({
+      size: this.vertexBufferSize,
+      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX,
+    });
+
+    this.normalBuffer = this.device.createBuffer({
+      size: this.vertexBufferSize,
+      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX,
+    });
+
+    this.indexBuffer = this.device.createBuffer({
+      size: this.indexBufferSize,
+      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.INDEX,
+    });
+
+    this.device.createShaderModule({
+      label: 'Marching Cubes Compute Shader',
+      code: MarchingCubesComputeSource
+    });
+  }
+
+  update(marchingCubes) {
+    
+  }
+}

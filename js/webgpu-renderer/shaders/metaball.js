@@ -19,6 +19,198 @@
 // SOFTWARE.
 
 import { ProjectionUniforms, ViewUniforms, ColorConversions, ATTRIB_MAP } from './common.js';
+import {
+  MarchingCubesEdgeTable,
+  MarchingCubesTriTable,
+} from "../../marching-cubes-tables.js";
+
+export const ISOURFACE_DIMENSIONS = [32, 18, 48];
+export const TOTAL_VALUES = ISOURFACE_DIMENSIONS[0] * ISOURFACE_DIMENSIONS[1] * ISOURFACE_DIMENSIONS[2];
+
+let edges = '';
+for (const edge of MarchingCubesEdgeTable) {
+  edges += `vec2<u32>(${edge}u, 0u),`;
+}
+
+// It's silly to do these as vectors, but due to a temporary WGSL bug it's the only thing that will
+// work on Chrome.
+const edgeTable = `
+  let edgeTable : array<vec2<u32>, ${MarchingCubesEdgeTable.length}> =
+    array<vec2<u32>, ${MarchingCubesEdgeTable.length}>(${edges});
+`;
+
+let triIndices = '';
+for (const index of MarchingCubesTriTable) {
+  triIndices += `vec2<i32>(${index},-1),`;
+}
+
+const triTable = `
+  let triTable : array<vec2<i32>, ${MarchingCubesTriTable.length}> =
+    array<vec2<i32>, ${MarchingCubesTriTable.length}>(${triIndices});
+`;
+
+const IsosurfaceVolume = `
+  [[block]] struct IsosurfaceVolume {
+    min: vec3<f32>;
+    max: vec3<f32>;
+    step: vec3<f32>;
+    threshold: f32;
+    size: vec3<u32>;
+    values: [[stride(4)]] array<f32>;
+  };
+`;
+
+export const MetaballFieldComputeSource = `
+
+`;
+
+export const MarchingCubesComputeSource = `
+  ${edgeTable}
+  ${triTable}
+
+  ${IsosurfaceVolume}
+  [[group(0), binding(0)]] var<storage> volume : [[access(read)]] IsosurfaceVolume;
+
+  // Output buffers
+  [[block]] struct PositionBuffer {
+    values : array<vec3<f32>>;
+  };
+  [[group(1), binding(0)]] var<storage> positionsOut : [[access(write)]] PositionBuffer;
+
+  [[block]] struct NormalBuffer {
+    values : array<vec3<f32>>;
+  };
+  [[group(1), binding(1)]] var<storage> normalsOut : [[access(write)]] NormalBuffer;
+
+  [[block]] struct IndexBuffer {
+    tris : array<vec3<u32>>;
+  };
+  [[group(1), binding(2)]] var<storage> indicesOut : [[access(write)]] IndexBuffer;
+
+  // Data fetchers
+  fn valueAt(index : vec3<u32>) -> f32 {
+    let valueIndex : u32 = index.x +
+                          (index.y * volume.size.x) +
+                          (index.z * volume.size.x * volume.size.y);
+    return volume.values[valueIndex];
+  }
+
+  fn positionAt(index : vec3<u32>) -> vec3<f32> {
+    return volume.min + (volume.step * vec3<f32>(index.xyz));
+  }
+
+  fn normalAt(index : vec3<u32>) -> vec3<f32> {
+    return vec3<f32>(
+      valueAt(index - vec3<u32>(1u, 0u, 0u)) - valueAt(index + vec3<u32>(1u, 0u, 0u)),
+      valueAt(index - vec3<u32>(0u, 1u, 0u)) - valueAt(index + vec3<u32>(0u, 1u, 0u)),
+      valueAt(index - vec3<u32>(0u, 0u, 1u)) - valueAt(index + vec3<u32>(0u, 0u, 1u))
+    );
+  }
+  
+  // Vertex interpolation
+  var<private> positions : array<vec3<f32>, 12>;
+  var<private> normals : array<vec3<f32>, 12>;
+
+  fn interpX(offset : u32, i : vec3<u32>, va : f32, vb : f32) {
+    let mu : f32 = (volume.threshold - va) / (vb - va);
+    positions[offset] = positionAt(i) + vec3<f32>(volume.step.x * mu, 0.0, 0.0);
+
+    let na : vec3<f32> = normalAt(i);
+    let nb : vec3<f32> = normalAt(i + vec3<u32>(1u, 0u, 0u));
+    normals[offset] = mix(na, nb, vec3<f32>(mu, mu, mu));
+  }
+
+  fn interpY(offset : u32, i : vec3<u32>, va : f32, vb : f32) {
+    let mu : f32 = (volume.threshold - va) / (vb - va);
+    positions[offset] = positionAt(i) + vec3<f32>(0.0, volume.step.y * mu, 0.0);
+
+    let na : vec3<f32> = normalAt(i);
+    let nb : vec3<f32> = normalAt(i + vec3<u32>(0u, 1u, 0u));
+    normals[offset] = mix(na, nb, vec3<f32>(mu, mu, mu));
+  }
+
+  fn interpZ(offset : u32, i : vec3<u32>, va : f32, vb : f32) {
+    let mu : f32 = (volume.threshold - va) / (vb - va);
+    positions[offset] = positionAt(i) + vec3<f32>(0.0, 0.0, volume.step.z * mu);
+
+    let na : vec3<f32> = normalAt(i);
+    let nb : vec3<f32> = normalAt(i + vec3<u32>(0u, 0u, 1u));
+    normals[offset] = mix(na, nb, vec3<f32>(mu, mu, mu));
+  }
+
+  // Main marching cubes algorithm
+  [[stage(compute)]]
+  fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+    // Cache the values we're going to be referencing frequently.
+    let i0 : vec3<u32> = global_id;
+    let i1 : vec3<u32> = global_id + vec3<u32>(1u, 0u, 0u);
+    let i2 : vec3<u32> = global_id + vec3<u32>(1u, 1u, 0u);
+    let i3 : vec3<u32> = global_id + vec3<u32>(0u, 1u, 0u);
+    let i4 : vec3<u32> = global_id + vec3<u32>(0u, 0u, 1u);
+    let i5 : vec3<u32> = global_id + vec3<u32>(1u, 0u, 1u);
+    let i6 : vec3<u32> = global_id + vec3<u32>(1u, 1u, 1u);
+    let i7 : vec3<u32> = global_id + vec3<u32>(0u, 1u, 1u);
+
+    let v0 : f32 = valueAt(i0);
+    let v1 : f32 = valueAt(i1);
+    let v2 : f32 = valueAt(i2);
+    let v3 : f32 = valueAt(i3);
+    let v4 : f32 = valueAt(i4);
+    let v5 : f32 = valueAt(i5);
+    let v6 : f32 = valueAt(i6);
+    let v7 : f32 = valueAt(i7);
+
+    var cubeIndex : u32 = 0u;
+    if (v0 < volume.threshold) { cubeIndex = cubeIndex | 1u; }
+    if (v1 < volume.threshold) { cubeIndex = cubeIndex | 2u; }
+    if (v2 < volume.threshold) { cubeIndex = cubeIndex | 4u; }
+    if (v3 < volume.threshold) { cubeIndex = cubeIndex | 8u; }
+    if (v4 < volume.threshold) { cubeIndex = cubeIndex | 16u; }
+    if (v5 < volume.threshold) { cubeIndex = cubeIndex | 32u; }
+    if (v6 < volume.threshold) { cubeIndex = cubeIndex | 64u; }
+    if (v7 < volume.threshold) { cubeIndex = cubeIndex | 128u; }
+
+    let edges : u32 = edgeTable[cubeIndex].x;
+
+    // Once we have atomics we can early-terminate here if edges == 0
+
+    if ((edges & 1u) != 0u) { interpX(0u, i0, v0, v1); }
+    if ((edges & 2u) != 0u) { interpY(1u, i1, v1, v2); }
+    if ((edges & 4u) != 0u) { interpX(2u, i3, v3, v2); }
+    if ((edges & 8u) != 0u) { interpY(3u, i0, v0, v3); }
+
+    if ((edges & 16u) != 0u) { interpX(4u, i4, v4, v5); }
+    if ((edges & 32u) != 0u) { interpY(5u, i5, v5, v6); }
+    if ((edges & 64u) != 0u) { interpX(6u, i7, v7, v6); }
+    if ((edges & 128u) != 0u) { interpY(7u, i4, v4, v7); }
+
+    if ((edges & 256u) != 0u) { interpZ(8u, i0, v0, v4); }
+    if ((edges & 512u) != 0u) { interpZ(9u, i1, v1, v5); }
+    if ((edges & 1024u) != 0u) { interpZ(10u, i2, v2, v6); }
+    if ((edges & 2048u) != 0u) { interpZ(11u, i3, v3, v7); }
+
+    // Copy positions to output buffer
+
+    // In an ideal world this offset is tracked as an atomic so that we don't waste so much space.
+    let vertexOffset : u32 = (global_id.x +
+                              global_id.y * volume.size.x +
+                              global_id.z * volume.size.x * volume.size.y) * 12u;
+    for (var i : u32 = 0u; i < 12u; i = i + 1u) {
+      positionsOut.values[vertexOffset + i] = positions[i];
+      normalsOut.values[vertexOffset + i] = normals[i];
+    }
+
+    // Compute the indices for the positions
+    var triTableOffset : u32 = cubeIndex << 4u;
+    loop {
+      let index : i32 = triTable[triTableOffset].x;
+      triTableOffset = triTableOffset + 1u;
+      if (index == -1) { break; }
+
+      //arrays.indices[arrays.indexOffset++] = index[i0];
+    }
+  }
+`;
 
 export const MetaballVertexSource = `
   ${ProjectionUniforms}
