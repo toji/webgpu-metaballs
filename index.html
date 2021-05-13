@@ -65,14 +65,14 @@
       document.body.appendChild(stats.dom);
 
       const camera = new OrbitCamera();
-      camera.target = [0, 1, 0]; // TODO: This seems swizzled
+      camera.target = [0, 1, 0];
       camera.distance = 2.5;
       camera.orbitX = Math.PI * 0.1;
       camera.minOrbitX = Math.PI * -0.1;
 
       const appSettings = {
         scene: './media/models/dungeon/dungeon.glb',
-        metaballMethod: 'newBuffer',
+        metaballMethod: 'stagingRing',
         renderLightSprites: true,
         sceneLights: true,
         metaballLights: true,
@@ -87,7 +87,7 @@
         'New staging buffer each frame': 'newStaging',
         'Single staging buffer re-mapped each frame': 'singleStaging',
         'Ring of staging buffers': 'stagingRing',
-        //'GPU generated': 'gpuGenerated',
+        'GPU generated (BROKEN!)': 'gpuGenerated',
       }).onChange(() => {
         if (renderer) {
           renderer.setMetaballMethod(appSettings.metaballMethod);
