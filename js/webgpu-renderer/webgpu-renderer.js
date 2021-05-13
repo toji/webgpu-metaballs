@@ -308,7 +308,7 @@ export class WebGPURenderer extends Renderer {
       return;
     }
 
-    this.metaballRenderer = new rendererConstructor(this);
+    this.metaballRenderer = new rendererConstructor(this, this.marchingCubes.volume);
     this.metaballsNeedUpdate = true;
   }
 

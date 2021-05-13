@@ -54,8 +54,8 @@ const IsosurfaceVolume = `
     min: vec3<f32>;
     max: vec3<f32>;
     step: vec3<f32>;
-    threshold: f32;
     size: vec3<u32>;
+    threshold: f32;
     values: [[stride(4)]] array<f32>;
   };
 `;
@@ -75,17 +75,17 @@ export const MarchingCubesComputeSource = `
   [[block]] struct PositionBuffer {
     values : array<vec3<f32>>;
   };
-  [[group(1), binding(0)]] var<storage> positionsOut : [[access(write)]] PositionBuffer;
+  [[group(0), binding(1)]] var<storage> positionsOut : [[access(write)]] PositionBuffer;
 
   [[block]] struct NormalBuffer {
     values : array<vec3<f32>>;
   };
-  [[group(1), binding(1)]] var<storage> normalsOut : [[access(write)]] NormalBuffer;
+  [[group(0), binding(2)]] var<storage> normalsOut : [[access(write)]] NormalBuffer;
 
   [[block]] struct IndexBuffer {
     tris : array<vec3<u32>>;
   };
-  [[group(1), binding(2)]] var<storage> indicesOut : [[access(write)]] IndexBuffer;
+  [[group(0), binding(3)]] var<storage> indicesOut : [[access(write)]] IndexBuffer;
 
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {
@@ -194,20 +194,26 @@ export const MarchingCubesComputeSource = `
     // In an ideal world this offset is tracked as an atomic so that we don't waste so much space.
     let vertexOffset : u32 = (global_id.x +
                               global_id.y * volume.size.x +
-                              global_id.z * volume.size.x * volume.size.y) * 12u;
+                              global_id.z * volume.size.x * volume.size.y);
     for (var i : u32 = 0u; i < 12u; i = i + 1u) {
-      positionsOut.values[vertexOffset + i] = positions[i];
-      normalsOut.values[vertexOffset + i] = normals[i];
+      positionsOut.values[vertexOffset*12u + i] = positions[i];
+      normalsOut.values[vertexOffset*12u + i] = normals[i];
     }
 
     // Compute the indices for the positions
     var triTableOffset : u32 = cubeIndex << 4u;
-    loop {
-      let index : i32 = triTable[triTableOffset].x;
-      triTableOffset = triTableOffset + 1u;
-      if (index == -1) { break; }
-
-      //arrays.indices[arrays.indexOffset++] = index[i0];
+    for (var i : u32 = 0u; i < 5u; i = i + 1u) {
+      if (triTable[triTableOffset].x < 0) {
+        // Fill in degenerate triangles if the indicies are -1.
+        indicesOut.tris[i] = vec3<u32>(vertexOffset, vertexOffset, vertexOffset);
+      } else {
+        indicesOut.tris[i] = vec3<u32>(
+          u32(triTable[triTableOffset].x) + vertexOffset,
+          u32(triTable[triTableOffset+1u].x) + vertexOffset,
+          u32(triTable[triTableOffset+2u].x) + vertexOffset
+        );
+      }
+      triTableOffset = triTableOffset + 3u;
     }
   }
 `;

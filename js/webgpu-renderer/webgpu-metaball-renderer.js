@@ -17,13 +17,14 @@ import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { MetaballVertexSource, MetaballFragmentSource, MarchingCubesComputeSource } from './shaders/metaball.js';
 
 const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
-const METABALLS_INDEX_BUFFER_SIZE = Uint16Array.BYTES_PER_ELEMENT * 16384;
+const METABALLS_INDEX_BUFFER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 16384;
 
 // Common assets used by every variant of the Metaball renderer
 class WebGPUMetaballRendererBase {
-  constructor(renderer, createBuffers=true) {
+  constructor(renderer, volume, createBuffers=true) {
     this.renderer = renderer;
     this.device = renderer.device;
+    this.volume = volume;
 
     this.vertexBufferSize = METABALLS_VERTEX_BUFFER_SIZE;
     this.indexBufferSize = METABALLS_INDEX_BUFFER_SIZE;
@@ -107,7 +108,7 @@ class WebGPUMetaballRendererBase {
       passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
       passEncoder.setVertexBuffer(0, this.vertexBuffer);
       passEncoder.setVertexBuffer(1, this.normalBuffer);
-      passEncoder.setIndexBuffer(this.indexBuffer, 'uint16');
+      passEncoder.setIndexBuffer(this.indexBuffer, 'uint32');
       passEncoder.drawIndexed(this.indexCount, 1, 0, 0, 0);
     }
   }
@@ -137,15 +138,15 @@ class WebGPUMetaballRendererBase {
  *  - TODO
  */
 export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer) {
-    super(renderer);
+  constructor(renderer, volume) {
+    super(renderer, volume);
 
     this.vertexBufferElements = this.vertexBufferSize / Float32Array.BYTES_PER_ELEMENT;
-    this.indexBufferElements = this.indexBufferSize / Uint16Array.BYTES_PER_ELEMENT
+    this.indexBufferElements = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT
 
     this.vertexArray = new Float32Array(this.vertexBufferElements);
     this.normalArray = new Float32Array(this.vertexBufferElements);
-    this.indexArray = new Uint16Array(this.indexBufferElements);
+    this.indexArray = new Uint32Array(this.indexBufferElements);
   }
 
   async update(marchingCubes) {
@@ -187,8 +188,8 @@ export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
  *  - Requires a GPU-side copy
  */
 export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer) {
-    super(renderer, false);
+  constructor(renderer, volume) {
+    super(renderer, volume, false);
   }
 
   async update(marchingCubes) {
@@ -213,7 +214,7 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
     this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(newVertexBuffer.getMappedRange()),
       normals:   new Float32Array(newNormalBuffer.getMappedRange()),
-      indices:   new Uint16Array(newIndexBuffer.getMappedRange())
+      indices:   new Uint32Array(newIndexBuffer.getMappedRange())
     });
 
     newVertexBuffer.unmap();
@@ -278,7 +279,7 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
     this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(vertexStagingBuffer.getMappedRange()),
       normals:   new Float32Array(normalStagingBuffer.getMappedRange()),
-      indices:   new Uint16Array(indexStagingBuffer.getMappedRange())
+      indices:   new Uint32Array(indexStagingBuffer.getMappedRange())
     });
 
     vertexStagingBuffer.unmap();
@@ -323,8 +324,8 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
  *  - Requires a GPU-side copy
  */
 export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
-  constructor(renderer) {
-    super(renderer);
+  constructor(renderer, volume) {
+    super(renderer, volume);
 
     this.vertexStagingBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
@@ -353,7 +354,7 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
     this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(this.vertexStagingBuffer.getMappedRange()),
       normals:   new Float32Array(this.normalStagingBuffer.getMappedRange()),
-      indices:   new Uint16Array(this.indexStagingBuffer.getMappedRange())
+      indices:   new Uint32Array(this.indexStagingBuffer.getMappedRange())
     });
 
     this.vertexStagingBuffer.unmap();
@@ -402,8 +403,8 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
  *  - Requires a GPU-side copy
  */
 export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
-  constructor(renderer) {
-    super(renderer);
+  constructor(renderer, volume) {
+    super(renderer, volume);
 
     this.readyBuffers = [];
   }
@@ -440,7 +441,7 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
     this.indexCount = marchingCubes.generateMesh({
       positions: new Float32Array(stagingBuffers.vertex.getMappedRange()),
       normals:   new Float32Array(stagingBuffers.normal.getMappedRange()),
-      indices:   new Uint16Array(stagingBuffers.index.getMappedRange())
+      indices:   new Uint32Array(stagingBuffers.index.getMappedRange())
     });
 
     stagingBuffers.vertex.unmap();
@@ -486,10 +487,50 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
  */
 
 export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
-  constructor(renderer) {
-    super(renderer, false);
+  constructor(renderer, volume) {
+    super(renderer, volume, false);
 
-    // Metaball resources
+    this.volumeElements = volume.width * volume.height * volume.depth;
+    this.volumeBufferSize = (Float32Array.BYTES_PER_ELEMENT * 12) +
+                            (Uint32Array.BYTES_PER_ELEMENT * 4) +
+                            (Float32Array.BYTES_PER_ELEMENT * this.volumeElements);
+
+    this.volumeBuffer = this.device.createBuffer({
+      size: this.volumeBufferSize,
+      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      mappedAtCreation: true,
+    });
+
+    // Fill the buffer with information about the isosurface volume.
+    const volumeMappedArray = this.volumeBuffer.getMappedRange();
+    const volumeFloat32 = new Float32Array(volumeMappedArray);
+    const volumeSize = new Float32Array(volumeMappedArray, 12, 3);
+
+    volumeFloat32[0] = volume.xMin;
+    volumeFloat32[1] = volume.yMin;
+    volumeFloat32[2] = volume.zMin;
+
+    volumeFloat32[4] = volume.xMax;
+    volumeFloat32[5] = volume.yMax;
+    volumeFloat32[6] = volume.zMax;
+
+    volumeFloat32[8] = volume.xStep;
+    volumeFloat32[9] = volume.yStep;
+    volumeFloat32[10] = volume.zStep;
+
+    volumeSize[0] = volume.width;
+    volumeSize[1] = volume.height;
+    volumeSize[2] = volume.depth;
+
+    volumeFloat32[15] = 40; // Threshold. TODO: Should be dynamic.
+
+    this.volumeBuffer.unmap();
+
+    // Mesh resources
+    this.marchingCubeCells = (volume.width-1) * (volume.height-1) * (volume.depth-1);
+    this.vertexBufferSize = (Float32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
+    this.indexBufferSize = (Uint32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
+
     this.vertexBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
       usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX,
@@ -505,13 +546,83 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.INDEX,
     });
 
-    this.device.createShaderModule({
-      label: 'Marching Cubes Compute Shader',
-      code: MarchingCubesComputeSource
+    this.marchingCubesComputeBindGroupLayout = this.device.createBindGroupLayout({
+      label: `Marching Cubes Compute Bind Group Layout`,
+      entries: [{
+        binding: 0, // Volume info
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'read-only-storage' }
+      }, {
+        binding: 1, // Position buffer
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' }
+      }, {
+        binding: 2, // Normal buffer
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' }
+      },{
+        binding: 3, // Index buffer
+        visibility: GPUShaderStage.COMPUTE,
+        buffer: { type: 'storage' }
+      }]
+    });
+
+    this.marchingCubesComputePipeline = this.device.createComputePipeline({
+      label: 'Marching Cubes Compute Pipeline',
+      layout: this.device.createPipelineLayout({
+        bindGroupLayouts: [ this.marchingCubesComputeBindGroupLayout ]
+      }),
+      compute: {
+        module: this.device.createShaderModule({
+          label: 'Marching Cubes Compute Shader',
+          code: MarchingCubesComputeSource
+        }),
+        entryPoint: 'computeMain',
+      }
+    });
+
+    this.marchingCubesComputeBindGroup = this.device.createBindGroup({
+      layout: this.marchingCubesComputeBindGroupLayout,
+      entries: [{
+        binding: 0,
+        resource: {
+          buffer: this.volumeBuffer,
+        },
+      }, {
+        binding: 1,
+        resource: {
+          buffer: this.vertexBuffer,
+        },
+      }, {
+        binding: 2,
+        resource: {
+          buffer: this.normalBuffer,
+        },
+      }, {
+        binding: 3,
+        resource: {
+          buffer: this.indexBuffer,
+        },
+      }],
     });
   }
 
   update(marchingCubes) {
-    
+    // Update the volume buffer with the latest metaball values.
+    this.device.queue.writeBuffer(this.volumeBuffer, 16, marchingCubes.volume.values, 0, this.volumeElements);
+
+    // Run the compute shader to fill the position/normal/index buffers.
+    /*const commandEncoder = this.device.createCommandEncoder();
+    const passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(this.marchingCubesComputePipeline);
+    passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
+    passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+    passEncoder.endPass();
+
+    this.device.queue.submit([commandEncoder.finish()]);
+
+    this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;*/
   }
+
+  // TODO: DrawIndirect once the buffers are dynamically packed.
 }

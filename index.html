@@ -72,7 +72,7 @@
 
       const appSettings = {
         scene: './media/models/dungeon/dungeon.glb',
-        metaballMethod: 'gpuGenerated',
+        metaballMethod: 'stagingRing',
         renderLightSprites: true,
         sceneLights: true,
         metaballLights: true,
@@ -87,7 +87,7 @@
         'New staging buffer each frame': 'newStaging',
         'Single staging buffer re-mapped each frame': 'singleStaging',
         'Ring of staging buffers': 'stagingRing',
-        'GPU generated': 'gpuGenerated',
+        'GPU generated (BROKEN!)': 'gpuGenerated',
       }).onChange(() => {
         if (renderer) {
           renderer.setMetaballMethod(appSettings.metaballMethod);
