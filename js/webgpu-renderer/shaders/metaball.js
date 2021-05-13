@@ -24,29 +24,37 @@ import {
   MarchingCubesTriTable,
 } from "../../marching-cubes-tables.js";
 
-export const ISOURFACE_DIMENSIONS = [32, 18, 48];
-export const TOTAL_VALUES = ISOURFACE_DIMENSIONS[0] * ISOURFACE_DIMENSIONS[1] * ISOURFACE_DIMENSIONS[2];
-
 let edges = '';
 for (const edge of MarchingCubesEdgeTable) {
-  edges += `vec2<u32>(${edge}u, 0u),`;
+  edges += `${edge}u,`;
 }
 
-// It's silly to do these as vectors, but due to a temporary WGSL bug it's the only thing that will
-// work on Chrome.
 const edgeTable = `
-  let edgeTable : array<vec2<u32>, ${MarchingCubesEdgeTable.length}> =
-    array<vec2<u32>, ${MarchingCubesEdgeTable.length}>(${edges});
+  let edgeTable : array<u32, ${MarchingCubesEdgeTable.length}> =
+    array<u32, ${MarchingCubesEdgeTable.length}>(${edges});
 `;
 
-let triIndices = '';
-for (const index of MarchingCubesTriTable) {
-  triIndices += `vec2<i32>(${index},-1),`;
+function triIdx(i) {
+  return Math.max(MarchingCubesTriTable[i], 0);
 }
+let triIndices = '';
+for (let i = 0; i < MarchingCubesTriTable.length;i++) {
+  triIndices += `
+    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
+    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
+    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
+    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
+    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
+  `;
+}
+// Is it better to just do this as an array of ints?
+/*for (const index of MarchingCubesTriTable) {
+  triIndices += `${index},`;
+}*/
 
 const triTable = `
-  let triTable : array<vec2<i32>, ${MarchingCubesTriTable.length}> =
-    array<vec2<i32>, ${MarchingCubesTriTable.length}>(${triIndices});
+  let triTable : array<vec3<u32>, ${MarchingCubesEdgeTable.length*5}> =
+    array<vec3<u32>, ${MarchingCubesEdgeTable.length*5}>(${triIndices});
 `;
 
 const IsosurfaceVolume = `
@@ -170,7 +178,7 @@ export const MarchingCubesComputeSource = `
     if (v6 < volume.threshold) { cubeIndex = cubeIndex | 64u; }
     if (v7 < volume.threshold) { cubeIndex = cubeIndex | 128u; }
 
-    let edges : u32 = edgeTable[cubeIndex].x;
+    let edges : u32 = edgeTable[cubeIndex];
 
     // Once we have atomics we can early-terminate here if edges == 0
 
@@ -201,19 +209,14 @@ export const MarchingCubesComputeSource = `
     }
 
     // Compute the indices for the positions
-    var triTableOffset : u32 = cubeIndex << 4u;
+    var triTableOffset : u32 = cubeIndex * 5u;
     for (var i : u32 = 0u; i < 5u; i = i + 1u) {
-      if (triTable[triTableOffset].x < 0) {
-        // Fill in degenerate triangles if the indicies are -1.
-        indicesOut.tris[i] = vec3<u32>(vertexOffset, vertexOffset, vertexOffset);
-      } else {
-        indicesOut.tris[i] = vec3<u32>(
-          u32(triTable[triTableOffset].x) + vertexOffset,
-          u32(triTable[triTableOffset+1u].x) + vertexOffset,
-          u32(triTable[triTableOffset+2u].x) + vertexOffset
-        );
-      }
-      triTableOffset = triTableOffset + 3u;
+      let tri : vec3<u32> = triTable[triTableOffset + i];
+      indicesOut.tris[i] = vec3<u32>(
+        tri.x + vertexOffset,
+        tri.y + vertexOffset,
+        tri.z + vertexOffset
+      );
     }
   }
 `;
