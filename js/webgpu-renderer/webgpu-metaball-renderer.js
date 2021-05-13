@@ -497,14 +497,14 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     this.volumeBuffer = this.device.createBuffer({
       size: this.volumeBufferSize,
-      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
       mappedAtCreation: true,
     });
 
     // Fill the buffer with information about the isosurface volume.
     const volumeMappedArray = this.volumeBuffer.getMappedRange();
     const volumeFloat32 = new Float32Array(volumeMappedArray);
-    const volumeSize = new Float32Array(volumeMappedArray, 12, 3);
+    const volumeSize = new Uint32Array(volumeMappedArray, 48, 3);
 
     volumeFloat32[0] = volume.xMin;
     volumeFloat32[1] = volume.yMin;
@@ -529,24 +529,24 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     // Mesh resources
     this.marchingCubeCells = (volume.width-1) * (volume.height-1) * (volume.depth-1);
     this.vertexBufferSize = (Float32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
-    this.indexBufferSize = (Uint32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
+    this.indexBufferSize = Uint32Array.BYTES_PER_ELEMENT * 15 * this.marchingCubeCells;
 
     this.vertexBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
-      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
     });
 
     this.normalBuffer = this.device.createBuffer({
       size: this.vertexBufferSize,
-      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.VERTEX,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
     });
 
     this.indexBuffer = this.device.createBuffer({
       size: this.indexBufferSize,
-      usage: GPUBufferUsage.COMPUTE | GPUBufferUsage.INDEX,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
     });
 
-    this.marchingCubesComputeBindGroupLayout = this.device.createBindGroupLayout({
+    /*this.marchingCubesComputeBindGroupLayout = this.device.createBindGroupLayout({
       label: `Marching Cubes Compute Bind Group Layout`,
       entries: [{
         binding: 0, // Volume info
@@ -565,24 +565,23 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
         visibility: GPUShaderStage.COMPUTE,
         buffer: { type: 'storage' }
       }]
+    });*/
+
+    const module = this.device.createShaderModule({
+      label: 'Marching Cubes Compute Shader',
+      code: MarchingCubesComputeSource
     });
 
     this.marchingCubesComputePipeline = this.device.createComputePipeline({
       label: 'Marching Cubes Compute Pipeline',
-      layout: this.device.createPipelineLayout({
+      /*layout: this.device.createPipelineLayout({
         bindGroupLayouts: [ this.marchingCubesComputeBindGroupLayout ]
-      }),
-      compute: {
-        module: this.device.createShaderModule({
-          label: 'Marching Cubes Compute Shader',
-          code: MarchingCubesComputeSource
-        }),
-        entryPoint: 'computeMain',
-      }
+      }),*/
+      compute: { module, entryPoint: 'computeMain' }
     });
 
     this.marchingCubesComputeBindGroup = this.device.createBindGroup({
-      layout: this.marchingCubesComputeBindGroupLayout,
+      layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),// this.marchingCubesComputeBindGroupLayout,
       entries: [{
         binding: 0,
         resource: {
@@ -609,10 +608,10 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
   update(marchingCubes) {
     // Update the volume buffer with the latest metaball values.
-    this.device.queue.writeBuffer(this.volumeBuffer, 16, marchingCubes.volume.values, 0, this.volumeElements);
+    this.device.queue.writeBuffer(this.volumeBuffer, 64, marchingCubes.volume.values, 0, this.volumeElements);
 
     // Run the compute shader to fill the position/normal/index buffers.
-    /*const commandEncoder = this.device.createCommandEncoder();
+    const commandEncoder = this.device.createCommandEncoder();
     const passEncoder = commandEncoder.beginComputePass();
     passEncoder.setPipeline(this.marchingCubesComputePipeline);
     passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
@@ -621,7 +620,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     this.device.queue.submit([commandEncoder.finish()]);
 
-    this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;*/
+    this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
   }
 
   // TODO: DrawIndirect once the buffers are dynamically packed.
