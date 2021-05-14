@@ -468,10 +468,6 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
   }
 }
 
-//
-// TODO: Populate buffer in a Compute shader
-//
-
 /**
  * For certain types of algorithmically generated data, it may be possible to generate the data in
  * a compute shader. This allows the data to be directly populated into the GPU-side buffer with
@@ -562,27 +558,6 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
     });
 
-    /*this.marchingCubesComputeBindGroupLayout = this.device.createBindGroupLayout({
-      label: `Marching Cubes Compute Bind Group Layout`,
-      entries: [{
-        binding: 0, // Volume info
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'read-only-storage' }
-      }, {
-        binding: 1, // Position buffer
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'storage' }
-      }, {
-        binding: 2, // Normal buffer
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'storage' }
-      },{
-        binding: 3, // Index buffer
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'storage' }
-      }]
-    });*/
-
     const module = this.device.createShaderModule({
       label: 'Marching Cubes Compute Shader',
       code: MarchingCubesComputeSource
@@ -590,14 +565,11 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     this.marchingCubesComputePipeline = this.device.createComputePipeline({
       label: 'Marching Cubes Compute Pipeline',
-      /*layout: this.device.createPipelineLayout({
-        bindGroupLayouts: [ this.marchingCubesComputeBindGroupLayout ]
-      }),*/
       compute: { module, entryPoint: 'computeMain' }
     });
 
     this.marchingCubesComputeBindGroup = this.device.createBindGroup({
-      layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),// this.marchingCubesComputeBindGroupLayout,
+      layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),
       entries: [{
         binding: 0,
         resource: {
