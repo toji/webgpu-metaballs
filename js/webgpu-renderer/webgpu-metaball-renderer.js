@@ -15,6 +15,10 @@
 
 import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { MetaballVertexSource, MetaballFragmentSource, MarchingCubesComputeSource } from './shaders/metaball.js';
+import {
+  MarchingCubesEdgeTable,
+  MarchingCubesTriTable,
+} from "../marching-cubes-tables.js";
 
 const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
 const METABALLS_INDEX_BUFFER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 16384;
@@ -490,6 +494,18 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
   constructor(renderer, volume) {
     super(renderer, volume, false);
 
+    // Fill a buffer with the lookup tables we need for the marching cubes algorithm.
+    this.tablesBuffer = this.device.createBuffer({
+      size: (MarchingCubesEdgeTable.length + MarchingCubesTriTable.length) * 4,
+      usage: GPUBufferUsage.STORAGE,
+      mappedAtCreation: true,
+    });
+
+    const tablesArray = new Int32Array(this.tablesBuffer.getMappedRange());
+    tablesArray.set(MarchingCubesEdgeTable);
+    tablesArray.set(MarchingCubesTriTable, MarchingCubesEdgeTable.length);
+    this.tablesBuffer.unmap();
+
     this.volumeElements = volume.width * volume.height * volume.depth;
     this.volumeBufferSize = (Float32Array.BYTES_PER_ELEMENT * 12) +
                             (Uint32Array.BYTES_PER_ELEMENT * 4) +
@@ -585,20 +601,25 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       entries: [{
         binding: 0,
         resource: {
-          buffer: this.volumeBuffer,
+          buffer: this.tablesBuffer,
         },
       }, {
         binding: 1,
         resource: {
-          buffer: this.vertexBuffer,
+          buffer: this.volumeBuffer,
         },
       }, {
         binding: 2,
         resource: {
-          buffer: this.normalBuffer,
+          buffer: this.vertexBuffer,
         },
       }, {
         binding: 3,
+        resource: {
+          buffer: this.normalBuffer,
+        },
+      }, {
+        binding: 4,
         resource: {
           buffer: this.indexBuffer,
         },
