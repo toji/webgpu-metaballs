@@ -36,7 +36,48 @@ const IsosurfaceVolume = `
 `;
 
 export const MetaballFieldComputeSource = `
+  struct Metaball {
+    position: vec3<f32>;
+    radius: f32;
+    strength: f32;
+    subtract: f32;
+  };
 
+  [[block]] struct MetaballList {
+    ballCount: u32;
+    balls: array<Metaball>;
+  };
+  [[group(0), binding(0)]] var<storage> metaballs : [[access(read)]] MetaballList;
+
+  ${IsosurfaceVolume}
+  [[group(0), binding(1)]] var<storage> volume : [[access(read_write)]] IsosurfaceVolume;
+
+  fn positionAt(index : vec3<u32>) -> vec3<f32> {
+    return volume.min + (volume.step * vec3<f32>(index.xyz));
+  }
+
+  fn surfaceFunc(position : vec3<f32>) -> f32 {
+    var result : f32 = 0.0;
+    for (var i : u32 = 0u; i < metaballs.ballCount; i = i + 1u) {
+      let ball : Metaball = metaballs.balls[i];
+      let dist : f32 = distance(position, ball.position);
+      let val : f32 = ball.strength / (0.000001 + (dist * dist)) - ball.subtract;
+      if (val > 0.0) {
+        result = result + val;
+      }
+    }
+    return result;
+  }
+
+  [[stage(compute)]]
+  fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+    let position : vec3<f32> = positionAt(global_id);
+    let valueIndex : u32 = global_id.x +
+                          (global_id.y * volume.size.x) +
+                          (global_id.z * volume.size.x * volume.size.y);
+    
+    volume.values[valueIndex] = surfaceFunc(position);
+  }
 `;
 
 export const MarchingCubesComputeSource = `
@@ -193,6 +234,8 @@ export const MarchingCubesComputeSource = `
       if (index >= 0) {
         indicesOut.tris[firstIndex + i] = firstVertex + u32(index);
       } else {
+        // Write out degenerate triangles whenever we don't have a real index in order to keep our
+        // stride constant. Again, this can go away once we have atomics.
         indicesOut.tris[firstIndex + i] = firstVertex;
       }
     }

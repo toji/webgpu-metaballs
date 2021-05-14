@@ -335,6 +335,8 @@ export class WebGPURenderer extends Renderer {
 
       super.updateMetaballs(timestamp);
 
+      this.metaballRenderer.updateMetaballs(this.metaballs, this.marchingCubes);
+
       /*if (!this.scene) {
         return;
       }*/

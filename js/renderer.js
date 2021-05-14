@@ -287,7 +287,6 @@ export class Renderer {
 
   updateMetaballs(timestamp) {
     this.metaballs.updateBalls(timestamp);
-    this.marchingCubes.updateVolume(this.metaballs);
 
     // Attach a light to each ball
     let lightIndex = this.sceneLightCount;
