@@ -108,6 +108,9 @@ export const MarchingCubesComputeSource = `
 
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {
+    // Don't index outside of the volume bounds.
+    if (any(index >= volume.size)) { return 0.0; }
+
     let valueIndex : u32 = index.x +
                           (index.y * volume.size.x) +
                           (index.z * volume.size.x * volume.size.y);
