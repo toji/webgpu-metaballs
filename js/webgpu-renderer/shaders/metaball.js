@@ -24,39 +24,6 @@ import {
   MarchingCubesTriTable,
 } from "../../marching-cubes-tables.js";
 
-let edges = '';
-for (const edge of MarchingCubesEdgeTable) {
-  edges += `${edge}u,`;
-}
-
-const edgeTable = `
-  let edgeTable : array<u32, ${MarchingCubesEdgeTable.length}> =
-    array<u32, ${MarchingCubesEdgeTable.length}>(${edges});
-`;
-
-function triIdx(i) {
-  return Math.max(MarchingCubesTriTable[i], 0);
-}
-let triIndices = '';
-for (let i = 0; i < MarchingCubesTriTable.length;i++) {
-  triIndices += `
-    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
-    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
-    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
-    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
-    vec3<u32>(${triIdx(i++)}u,${triIdx(i++)}u,${triIdx(i++)}u),
-  `;
-}
-// Is it better to just do this as an array of ints?
-/*for (const index of MarchingCubesTriTable) {
-  triIndices += `${index},`;
-}*/
-
-const triTable = `
-  let triTable : array<vec3<u32>, ${MarchingCubesEdgeTable.length*5}> =
-    array<vec3<u32>, ${MarchingCubesEdgeTable.length*5}>(${triIndices});
-`;
-
 const IsosurfaceVolume = `
   [[block]] struct IsosurfaceVolume {
     min: vec3<f32>;
@@ -73,27 +40,30 @@ export const MetaballFieldComputeSource = `
 `;
 
 export const MarchingCubesComputeSource = `
-  ${edgeTable}
-  ${triTable}
+  [[block]] struct Tables {
+    edges: [[stride(4)]] array<u32, ${MarchingCubesEdgeTable.length}>;
+    tris: [[stride(4)]] array<i32, ${MarchingCubesTriTable.length}>;
+  };
+  [[group(0), binding(0)]] var<storage> tables : [[access(read)]] Tables;
 
   ${IsosurfaceVolume}
-  [[group(0), binding(0)]] var<storage> volume : [[access(read)]] IsosurfaceVolume;
+  [[group(0), binding(1)]] var<storage> volume : [[access(read)]] IsosurfaceVolume;
 
   // Output buffers
   [[block]] struct PositionBuffer {
-    values : array<vec3<f32>>;
+    values : array<f32>;
   };
-  [[group(0), binding(1)]] var<storage> positionsOut : [[access(write)]] PositionBuffer;
+  [[group(0), binding(2)]] var<storage> positionsOut : [[access(write)]] PositionBuffer;
 
   [[block]] struct NormalBuffer {
-    values : array<vec3<f32>>;
+    values : array<f32>;
   };
-  [[group(0), binding(2)]] var<storage> normalsOut : [[access(write)]] NormalBuffer;
+  [[group(0), binding(3)]] var<storage> normalsOut : [[access(write)]] NormalBuffer;
 
   [[block]] struct IndexBuffer {
-    tris : array<vec3<u32>>;
+    tris : array<u32>;
   };
-  [[group(0), binding(3)]] var<storage> indicesOut : [[access(write)]] IndexBuffer;
+  [[group(0), binding(4)]] var<storage> indicesOut : [[access(write)]] IndexBuffer;
 
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {
@@ -178,7 +148,7 @@ export const MarchingCubesComputeSource = `
     if (v6 < volume.threshold) { cubeIndex = cubeIndex | 64u; }
     if (v7 < volume.threshold) { cubeIndex = cubeIndex | 128u; }
 
-    let edges : u32 = edgeTable[cubeIndex];
+    let edges : u32 = tables.edges[cubeIndex];
 
     // Once we have atomics we can early-terminate here if edges == 0
 
@@ -197,26 +167,34 @@ export const MarchingCubesComputeSource = `
     if ((edges & 1024u) != 0u) { interpZ(10u, i2, v2, v6); }
     if ((edges & 2048u) != 0u) { interpZ(11u, i3, v3, v7); }
 
-    // Copy positions to output buffer
-
+    
     // In an ideal world this offset is tracked as an atomic so that we don't waste so much space.
-    let vertexOffset : u32 = (global_id.x +
+    let bufferOffset : u32 = (global_id.x +
                               global_id.y * volume.size.x +
                               global_id.z * volume.size.x * volume.size.y);
+
+    // Copy positions to output buffer
+    let firstVertex : u32 = bufferOffset*12u;
     for (var i : u32 = 0u; i < 12u; i = i + 1u) {
-      positionsOut.values[vertexOffset*12u + i] = positions[i];
-      normalsOut.values[vertexOffset*12u + i] = normals[i];
+      positionsOut.values[firstVertex*3u + i*3u] = positions[i].x;
+      positionsOut.values[firstVertex*3u + i*3u + 1u] = positions[i].y;
+      positionsOut.values[firstVertex*3u + i*3u + 2u] = positions[i].z;
+
+      normalsOut.values[firstVertex*3u + i*3u] = normals[i].x;
+      normalsOut.values[firstVertex*3u + i*3u + 1u] = normals[i].y;
+      normalsOut.values[firstVertex*3u + i*3u + 2u] = normals[i].z;
     }
 
-    // Compute the indices for the positions
-    var triTableOffset : u32 = cubeIndex * 5u;
-    for (var i : u32 = 0u; i < 5u; i = i + 1u) {
-      let tri : vec3<u32> = triTable[triTableOffset + i];
-      indicesOut.tris[i] = vec3<u32>(
-        tri.x + vertexOffset,
-        tri.y + vertexOffset,
-        tri.z + vertexOffset
-      );
+    // Write out the indices
+    let firstIndex : u32 = bufferOffset*15u;
+    var triTableOffset : u32 = cubeIndex*16u;
+    for (var i : u32 = 0u; i < 15u; i = i + 1u) {
+      let index : i32 = tables.tris[triTableOffset + i];
+      if (index >= 0) {
+        indicesOut.tris[firstIndex + i] = firstVertex + u32(index);
+      } else {
+        indicesOut.tris[firstIndex + i] = firstVertex;
+      }
     }
   }
 `;
