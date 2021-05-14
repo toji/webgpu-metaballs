@@ -14,7 +14,12 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
-import { MetaballVertexSource, MetaballFragmentSource, MarchingCubesComputeSource } from './shaders/metaball.js';
+import {
+  MetaballVertexSource,
+  MetaballFragmentSource,
+  MetaballFieldComputeSource,
+  MarchingCubesComputeSource
+} from './shaders/metaball.js';
 import {
   MarchingCubesEdgeTable,
   MarchingCubesTriTable,
@@ -22,6 +27,8 @@ import {
 
 const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
 const METABALLS_INDEX_BUFFER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 16384;
+
+const MAX_METABALLS = 32;
 
 // Common assets used by every variant of the Metaball renderer
 class WebGPUMetaballRendererBase {
@@ -99,6 +106,10 @@ class WebGPUMetaballRendererBase {
         count: this.renderer.renderBundleDescriptor.sampleCount
       }
     });
+  }
+
+  updateMetaballs(metaballs, marchingCubes) {
+    marchingCubes.updateVolume(metaballs);
   }
 
   update(marchingCubes) {
@@ -502,6 +513,15 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     tablesArray.set(MarchingCubesTriTable, MarchingCubesEdgeTable.length);
     this.tablesBuffer.unmap();
 
+    this.metaballBufferSize = (Uint32Array.BYTES_PER_ELEMENT * 4) + (Float32Array.BYTES_PER_ELEMENT * 8 * MAX_METABALLS);
+    this.metaballArray = new ArrayBuffer(this.metaballBufferSize);
+    this.metaballArrayHeader = new Uint32Array(this.metaballArray, 0, 4);
+    this.metaballArrayBalls = new Float32Array(this.metaballArray, 16);
+    this.metaballBuffer = this.device.createBuffer({
+      size: this.metaballBufferSize,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
     this.volumeElements = volume.width * volume.height * volume.depth;
     this.volumeBufferSize = (Float32Array.BYTES_PER_ELEMENT * 12) +
                             (Uint32Array.BYTES_PER_ELEMENT * 4) +
@@ -558,14 +578,41 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
     });
 
-    const module = this.device.createShaderModule({
+    // Create compute pipeline that handles the metaball isosurface.
+    const metaballModule = this.device.createShaderModule({
+      label: 'Metaball Isosurface Compute Shader',
+      code: MetaballFieldComputeSource
+    });
+
+    this.metaballComputePipeline = this.device.createComputePipeline({
+      label: 'Metaball Isosurface Compute Pipeline',
+      compute: { module: metaballModule, entryPoint: 'computeMain' }
+    });
+
+    this.metaballComputeBindGroup = this.device.createBindGroup({
+      layout: this.metaballComputePipeline.getBindGroupLayout(0),
+      entries: [{
+        binding: 0,
+        resource: {
+          buffer: this.metaballBuffer,
+        },
+      }, {
+        binding: 1,
+        resource: {
+          buffer: this.volumeBuffer,
+        },
+      }],
+    });
+
+    // Create compute pipeline that handles the marching cubes triangulation.
+    const marchingCubesModule = this.device.createShaderModule({
       label: 'Marching Cubes Compute Shader',
       code: MarchingCubesComputeSource
     });
 
     this.marchingCubesComputePipeline = this.device.createComputePipeline({
       label: 'Marching Cubes Compute Pipeline',
-      compute: { module, entryPoint: 'computeMain' }
+      compute: { module: marchingCubesModule, entryPoint: 'computeMain' }
     });
 
     this.marchingCubesComputeBindGroup = this.device.createBindGroup({
@@ -599,13 +646,35 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     });
   }
 
+  updateMetaballs(metaballs, marchingCubes) {
+    this.metaballArrayHeader[0] = metaballs.balls.length;
+
+    for (let i = 0; i < metaballs.balls.length; ++i) {
+      const ball = metaballs.balls[i];
+      const offset = i * 8;
+      this.metaballArrayBalls[offset] = ball.position[0];
+      this.metaballArrayBalls[offset+1] = ball.position[1];
+      this.metaballArrayBalls[offset+2] = ball.position[2];
+      this.metaballArrayBalls[offset+3] = ball.radius;
+      this.metaballArrayBalls[offset+4] = ball.strength;
+      this.metaballArrayBalls[offset+5] = ball.subtract;
+    }
+
+    // Update the metaball buffer with the latest metaball values.
+    this.device.queue.writeBuffer(this.metaballBuffer, 0, this.metaballArray);
+  }
+
   update(marchingCubes) {
-    // Update the volume buffer with the latest metaball values.
-    this.device.queue.writeBuffer(this.volumeBuffer, 64, marchingCubes.volume.values, 0, this.volumeElements);
+    // Update the volume buffer with the latest isosurface values.
+    //this.device.queue.writeBuffer(this.volumeBuffer, 64, marchingCubes.volume.values, 0, this.volumeElements);
 
     // Run the compute shader to fill the position/normal/index buffers.
     const commandEncoder = this.device.createCommandEncoder();
     const passEncoder = commandEncoder.beginComputePass();
+    passEncoder.setPipeline(this.metaballComputePipeline);
+    passEncoder.setBindGroup(0, this.metaballComputeBindGroup);
+    passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+
     passEncoder.setPipeline(this.marchingCubesComputePipeline);
     passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
     passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
