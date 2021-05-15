@@ -74,7 +74,8 @@
         scene: './media/models/dungeon/dungeon.glb',
         metaballMethod: 'stagingRing',
         renderLightSprites: true,
-        sceneLights: true,
+        renderEnvironment: true,
+        environmentLights: true,
         metaballLights: true,
         metaballStyle: 'lava',
       };
@@ -102,15 +103,21 @@
         }
       });
 
-      rendering.add(appSettings, 'sceneLights').onChange(() => {
+      rendering.add(appSettings, 'renderEnvironment').onChange(() => {
         if (renderer) {
-          renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
+          renderer.renderEnvironment = appSettings.renderEnvironment;
+        }
+      });
+
+      rendering.add(appSettings, 'environmentLights').onChange(() => {
+        if (renderer) {
+          renderer.enableLights(appSettings.environmentLights, appSettings.metaballLights);
         }
       });
 
       rendering.add(appSettings, 'metaballLights').onChange(() => {
         if (renderer) {
-          renderer.enableLights(appSettings.sceneLights, appSettings.metaballLights);
+          renderer.enableLights(appSettings.environmentLights, appSettings.metaballLights);
         }
       });
 
@@ -140,6 +147,7 @@
           renderer.lightManager.lightCount = appSettings.lightCount;
           renderer.updateLightRange(appSettings.maxLightRange);
           renderer.lightManager.render = appSettings.renderLightSprites;
+          renderer.renderEnvironment = appSettings.renderEnvironment;
           renderer.setMetaballStyle(appSettings.metaballStyle);
           renderer.setMetaballMethod(appSettings.metaballMethod);
 

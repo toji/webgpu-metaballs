@@ -38,6 +38,7 @@ class Light {
     this.destination = new Float32Array(3);
     this.travelTime = 0;
     this.static = true;
+    this.renderEnvironment = true;
 
     this._range = -1;
     this._intensity = 1;

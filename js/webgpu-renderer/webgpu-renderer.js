@@ -365,7 +365,7 @@ export class WebGPURenderer extends Renderer {
 
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
-    if (this.scene) {
+    if (this.scene && this.renderEnvironment) {
       this.scene.draw(passEncoder);
     }
 
