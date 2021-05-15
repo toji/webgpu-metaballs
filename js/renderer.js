@@ -181,8 +181,11 @@ export class Renderer {
     };
 
     this.resizeCallback = () => {
-      this.canvas.width = this.canvas.clientWidth * devicePixelRatio;
-      this.canvas.height = this.canvas.clientHeight * devicePixelRatio;
+      // Just to make life a little easier on some lower-end devices.
+      const scalar = Math.min(devicePixelRatio, 1.5);
+
+      this.canvas.width = this.canvas.clientWidth * scalar;
+      this.canvas.height = this.canvas.clientHeight * scalar;
 
       this.outputSize[0] = this.canvas.width;
       this.outputSize[1] = this.canvas.height;
@@ -296,7 +299,7 @@ export class Renderer {
       light.static = true;
 
       vec3.copy(light.color, this.metaballLightColor);
-      light.intensity = 6;
+      light.intensity = 4;
       vec3.copy(light.position, ball.position);
 
       lightIndex++;
