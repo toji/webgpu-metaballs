@@ -96,17 +96,17 @@ export class WebGPURenderer extends Renderer {
     this.textureLoader = new WebGPUTextureLoader(this.device);
 
     this.colorAttachment = {
-      // attachment is acquired and set in onResize.
-      attachment: undefined,
+      // view is acquired and set in onResize.
+      view: undefined,
       // attachment is acquired and set in onFrame.
       resolveTarget: undefined,
       loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-      storeOp: 'clear',
+      storeOp: 'store',
     };
 
     this.depthAttachment = {
-      // attachment is acquired and set in onResize.
-      attachment: undefined,
+      // view is acquired and set in onResize.
+      view: undefined,
       depthLoadValue: 1.0,
       depthStoreOp: 'store',
       stencilLoadValue: 0,
