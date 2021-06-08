@@ -65,7 +65,7 @@ export class WebGPURenderer extends Renderer {
 
   async init() {
     this.adapter = await navigator.gpu.requestAdapter({
-      powerPreference: "high-performance"
+      powerPreference: "high-performance",
     });
 
     // Enable compressed textures if available
@@ -79,13 +79,11 @@ export class WebGPURenderer extends Renderer {
       nonGuaranteedFeatures.push('timestamp-query');
     }*/
 
-    this.device = await this.adapter.requestDevice({nonGuaranteedFeatures});
+    const nonGuaranteedLimits = { maxBindGroups: 4 };
+
+    this.device = await this.adapter.requestDevice({nonGuaranteedFeatures, nonGuaranteedLimits});
 
     this.swapChainFormat = this.context.getSwapChainPreferredFormat(this.adapter);
-    this.swapChain = this.context.configureSwapChain({
-      device: this.device,
-      format: this.swapChainFormat
-    });
 
     this.renderBundleDescriptor = {
       colorFormats: [ this.swapChainFormat ],
@@ -272,6 +270,12 @@ export class WebGPURenderer extends Renderer {
   onResize(width, height) {
     if (!this.device) return;
 
+    this.swapChain = this.context.configureSwapChain({
+      device: this.device,
+      format: this.swapChainFormat,
+      size: {width, height}
+    });
+
     const msaaColorTexture = this.device.createTexture({
       size: { width, height },
       sampleCount: SAMPLE_COUNT,
@@ -381,7 +385,8 @@ export class WebGPURenderer extends Renderer {
     }
 
     passEncoder.endPass();
-    this.device.queue.submit([commandEncoder.finish()]);
+    const commandBuffer = commandEncoder.finish();
+    this.device.queue.submit([commandBuffer]);
 
     this.gpuStats.end();
   }
