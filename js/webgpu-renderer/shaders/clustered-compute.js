@@ -140,7 +140,7 @@ export const ClusterLightsSource = `
   ${ClusterLightsStructs}
 
   ${ClusterStructs}
-  [[group(1), binding(0)]] var<storage, read> clusters : Clusters;
+  [[group(1), binding(0)]] var<storage> clusters : Clusters;
 
   ${TileFunctions}
 
