@@ -90,7 +90,7 @@ class WebGPUMetaballRendererBase {
         module: this.device.createShaderModule({ code: MetaballFragmentSource }),
         entryPoint: "fragmentMain",
         targets: [{
-          format: this.renderer.swapChainFormat,
+          format: this.renderer.contextFormat,
         }]
       },
       primitive: {

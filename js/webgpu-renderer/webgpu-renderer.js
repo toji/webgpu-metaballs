@@ -83,10 +83,9 @@ export class WebGPURenderer extends Renderer {
 
     this.device = await this.adapter.requestDevice({nonGuaranteedFeatures, nonGuaranteedLimits});
 
-    this.swapChainFormat = this.context.getSwapChainPreferredFormat(this.adapter);
-
+    this.contextFormat = this.context.getPreferredFormat(this.adapter);
     this.renderBundleDescriptor = {
-      colorFormats: [ this.swapChainFormat ],
+      colorFormats: [ this.contextFormat ],
       depthStencilFormat: DEPTH_FORMAT,
       sampleCount: SAMPLE_COUNT
     };
@@ -270,16 +269,16 @@ export class WebGPURenderer extends Renderer {
   onResize(width, height) {
     if (!this.device) return;
 
-    this.swapChain = this.context.configureSwapChain({
+    this.context.configure({
       device: this.device,
-      format: this.swapChainFormat,
+      format: this.contextFormat,
       size: {width, height}
     });
 
     const msaaColorTexture = this.device.createTexture({
       size: { width, height },
       sampleCount: SAMPLE_COUNT,
-      format: this.swapChainFormat,
+      format: this.contextFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
     this.colorAttachment.view = msaaColorTexture.createView();
@@ -355,7 +354,7 @@ export class WebGPURenderer extends Renderer {
 
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
-    this.colorAttachment.resolveTarget = this.swapChain.getCurrentTexture().createView();
+    this.colorAttachment.resolveTarget = this.context.getCurrentTexture().createView();
 
     // Update the View uniforms buffer with the values. These are used by most shader programs
     // and don't change for the duration of the frame.
