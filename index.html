@@ -42,7 +42,6 @@
     {
         "imports": {
             "gl-matrix": "./node_modules/gl-matrix/dist/esm/index.js",
-            "webgl-texture-loader": "./node_modules/web-texture-tool/build/webgl-texture-loader.js",
             "webgpu-texture-loader": "./node_modules/web-texture-tool/build/webgpu-texture-loader.js",
             "dat.gui": "./node_modules/dat.gui/build/dat.gui.module.js",
             "stats.js": "./node_modules/stats.js/src/Stats.js"
@@ -72,7 +71,7 @@
 
       const appSettings = {
         scene: './media/models/dungeon/dungeon.glb',
-        metaballMethod: 'stagingRing',
+        metaballMethod: 'gpuGenerated',
         renderLightSprites: true,
         renderEnvironment: true,
         environmentLights: true,

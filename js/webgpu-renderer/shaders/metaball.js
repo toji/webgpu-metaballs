@@ -47,10 +47,10 @@ export const MetaballFieldComputeSource = `
     ballCount: u32;
     balls: array<Metaball>;
   };
-  [[group(0), binding(0)]] var<storage> metaballs : [[access(read)]] MetaballList;
+  [[group(0), binding(0)]] var<storage> metaballs : MetaballList;
 
   ${IsosurfaceVolume}
-  [[group(0), binding(1)]] var<storage> volume : [[access(read_write)]] IsosurfaceVolume;
+  [[group(0), binding(1)]] var<storage, read_write> volume : IsosurfaceVolume;
 
   fn positionAt(index : vec3<u32>) -> vec3<f32> {
     return volume.min + (volume.step * vec3<f32>(index.xyz));
@@ -85,26 +85,26 @@ export const MarchingCubesComputeSource = `
     edges: [[stride(4)]] array<u32, ${MarchingCubesEdgeTable.length}>;
     tris: [[stride(4)]] array<i32, ${MarchingCubesTriTable.length}>;
   };
-  [[group(0), binding(0)]] var<storage> tables : [[access(read)]] Tables;
+  [[group(0), binding(0)]] var<storage> tables : Tables;
 
   ${IsosurfaceVolume}
-  [[group(0), binding(1)]] var<storage> volume : [[access(read)]] IsosurfaceVolume;
+  [[group(0), binding(1)]] var<storage, write> volume : IsosurfaceVolume;
 
   // Output buffers
   [[block]] struct PositionBuffer {
     values : array<f32>;
   };
-  [[group(0), binding(2)]] var<storage> positionsOut : [[access(write)]] PositionBuffer;
+  [[group(0), binding(2)]] var<storage, write> positionsOut : PositionBuffer;
 
   [[block]] struct NormalBuffer {
     values : array<f32>;
   };
-  [[group(0), binding(3)]] var<storage> normalsOut : [[access(write)]] NormalBuffer;
+  [[group(0), binding(3)]] var<storage, write> normalsOut : NormalBuffer;
 
   [[block]] struct IndexBuffer {
     tris : array<u32>;
   };
-  [[group(0), binding(4)]] var<storage> indicesOut : [[access(write)]] IndexBuffer;
+  [[group(0), binding(4)]] var<storage, write> indicesOut : IndexBuffer;
 
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {

@@ -50,7 +50,7 @@ export class WebGPULightSprites {
         module: fragmentModule,
         entryPoint: 'fragmentMain',
         targets: [{
-          format: renderer.swapChainFormat,
+          format: renderer.contextFormat,
           blend: {
             color: {
               srcFactor: 'src-alpha',

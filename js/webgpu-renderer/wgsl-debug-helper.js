@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+const LOG_ALL_SHADERS = false;
 const LOG_FULL_SHADER_TEXT = true;
 
 const MESSAGE_STYLE = {
@@ -65,7 +66,7 @@ if ('GPUDevice' in window) {
       shaderModule.compilationInfo().then(async (info) => {
         const validationError = await validationPromise;
 
-        if (!info.messages.length && !validationError) {
+        if (!info.messages.length && !validationError && !LOG_ALL_SHADERS) {
           return;
         }
 
