@@ -69,19 +69,20 @@ export class WebGPURenderer extends Renderer {
     });
 
     // Enable compressed textures if available
-    const nonGuaranteedFeatures = [];
+    const requiredFeatures = [];
     if (this.adapter.features.has('texture-compression-bc') != -1) {
-      nonGuaranteedFeatures.push('texture-compression-bc');
+      requiredFeatures.push('texture-compression-bc');
     }
 
     // Enable timestamp queries if available
     /*if (this.adapter.features.has('timestamp-query') != -1) {
-      nonGuaranteedFeatures.push('timestamp-query');
+      requiredFeatures.push('timestamp-query');
     }*/
 
-    const nonGuaranteedLimits = { maxBindGroups: 4 };
+    // This is just for testing. Ignore.
+    const requiredLimits = { maxBindGroups: 4 };
 
-    this.device = await this.adapter.requestDevice({nonGuaranteedFeatures, nonGuaranteedLimits});
+    this.device = await this.adapter.requestDevice({requiredFeatures, requiredLimits});
 
     this.contextFormat = this.context.getPreferredFormat(this.adapter);
     this.renderBundleDescriptor = {

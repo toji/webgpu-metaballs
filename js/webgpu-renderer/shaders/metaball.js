@@ -132,32 +132,43 @@ export const MarchingCubesComputeSource = `
   // Vertex interpolation
   var<private> positions : array<vec3<f32>, 12>;
   var<private> normals : array<vec3<f32>, 12>;
+  var<private> indices : array<u32, 12>;
+  var<private> cubeVerts : u32 = 0u;
 
-  fn interpX(offset : u32, i : vec3<u32>, va : f32, vb : f32) {
+  fn interpX(index : u32, i : vec3<u32>, va : f32, vb : f32) {
     let mu : f32 = (volume.threshold - va) / (vb - va);
-    positions[offset] = positionAt(i) + vec3<f32>(volume.step.x * mu, 0.0, 0.0);
+    positions[cubeVerts] = positionAt(i) + vec3<f32>(volume.step.x * mu, 0.0, 0.0);
 
     let na : vec3<f32> = normalAt(i);
     let nb : vec3<f32> = normalAt(i + vec3<u32>(1u, 0u, 0u));
-    normals[offset] = mix(na, nb, vec3<f32>(mu, mu, mu));
+    normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
+
+    indices[index] = cubeVerts;
+    cubeVerts = cubeVerts + 1u;
   }
 
-  fn interpY(offset : u32, i : vec3<u32>, va : f32, vb : f32) {
+  fn interpY(index : u32, i : vec3<u32>, va : f32, vb : f32) {
     let mu : f32 = (volume.threshold - va) / (vb - va);
-    positions[offset] = positionAt(i) + vec3<f32>(0.0, volume.step.y * mu, 0.0);
+    positions[cubeVerts] = positionAt(i) + vec3<f32>(0.0, volume.step.y * mu, 0.0);
 
     let na : vec3<f32> = normalAt(i);
     let nb : vec3<f32> = normalAt(i + vec3<u32>(0u, 1u, 0u));
-    normals[offset] = mix(na, nb, vec3<f32>(mu, mu, mu));
+    normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
+
+    indices[index] = cubeVerts;
+    cubeVerts = cubeVerts + 1u;
   }
 
-  fn interpZ(offset : u32, i : vec3<u32>, va : f32, vb : f32) {
+  fn interpZ(index : u32, i : vec3<u32>, va : f32, vb : f32) {
     let mu : f32 = (volume.threshold - va) / (vb - va);
-    positions[offset] = positionAt(i) + vec3<f32>(0.0, 0.0, volume.step.z * mu);
+    positions[cubeVerts] = positionAt(i) + vec3<f32>(0.0, 0.0, volume.step.z * mu);
 
     let na : vec3<f32> = normalAt(i);
     let nb : vec3<f32> = normalAt(i + vec3<u32>(0u, 0u, 1u));
-    normals[offset] = mix(na, nb, vec3<f32>(mu, mu, mu));
+    normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
+
+    indices[index] = cubeVerts;
+    cubeVerts = cubeVerts + 1u;
   }
 
   // Main marching cubes algorithm
@@ -195,31 +206,38 @@ export const MarchingCubesComputeSource = `
     let edges : u32 = tables.edges[cubeIndex];
 
     // Once we have atomics we can early-terminate here if edges == 0
+    //if (edges == 0u) { return; }
 
     if ((edges & 1u) != 0u) { interpX(0u, i0, v0, v1); }
     if ((edges & 2u) != 0u) { interpY(1u, i1, v1, v2); }
     if ((edges & 4u) != 0u) { interpX(2u, i3, v3, v2); }
     if ((edges & 8u) != 0u) { interpY(3u, i0, v0, v3); }
-
     if ((edges & 16u) != 0u) { interpX(4u, i4, v4, v5); }
     if ((edges & 32u) != 0u) { interpY(5u, i5, v5, v6); }
     if ((edges & 64u) != 0u) { interpX(6u, i7, v7, v6); }
     if ((edges & 128u) != 0u) { interpY(7u, i4, v4, v7); }
-
     if ((edges & 256u) != 0u) { interpZ(8u, i0, v0, v4); }
     if ((edges & 512u) != 0u) { interpZ(9u, i1, v1, v5); }
     if ((edges & 1024u) != 0u) { interpZ(10u, i2, v2, v6); }
     if ((edges & 2048u) != 0u) { interpZ(11u, i3, v3, v7); }
 
-    
-    // In an ideal world this offset is tracked as an atomic so that we don't waste so much space.
+    let triTableOffset : u32 = (cubeIndex << 4u) + 1u;
+    let indexCount : u32 = u32(tables.tris[triTableOffset - 1u]);
+
+    // In an ideal world this offset is tracked as an atomic.
+    // let firstVertex = atomicAdd(vertexCount, cubeVerts);
+    // let firstIndex = atomicAdd(indexCount, indexCount);
+
+    // Instead we have to pad the vertex/index buffers with the maximum possible number of values
+    // and create degenerate triangles to fill the empty space, which is a waste of GPU cycles.
     let bufferOffset : u32 = (global_id.x +
                               global_id.y * volume.size.x +
                               global_id.z * volume.size.x * volume.size.y);
+    let firstVertex : u32 = bufferOffset*12u;
+    let firstIndex : u32 = bufferOffset*15u;
 
     // Copy positions to output buffer
-    let firstVertex : u32 = bufferOffset*12u;
-    for (var i : u32 = 0u; i < 12u; i = i + 1u) {
+    for (var i : u32 = 0u; i < cubeVerts; i = i + 1u) {
       positionsOut.values[firstVertex*3u + i*3u] = positions[i].x;
       positionsOut.values[firstVertex*3u + i*3u + 1u] = positions[i].y;
       positionsOut.values[firstVertex*3u + i*3u + 2u] = positions[i].z;
@@ -230,17 +248,15 @@ export const MarchingCubesComputeSource = `
     }
 
     // Write out the indices
-    let firstIndex : u32 = bufferOffset*15u;
-    var triTableOffset : u32 = cubeIndex*16u;
-    for (var i : u32 = 0u; i < 15u; i = i + 1u) {
+    for (var i : u32 = 0u; i < indexCount; i = i + 1u) {
       let index : i32 = tables.tris[triTableOffset + i];
-      if (index >= 0) {
-        indicesOut.tris[firstIndex + i] = firstVertex + u32(index);
-      } else {
-        // Write out degenerate triangles whenever we don't have a real index in order to keep our
-        // stride constant. Again, this can go away once we have atomics.
-        indicesOut.tris[firstIndex + i] = firstVertex;
-      }
+      indicesOut.tris[firstIndex + i] = firstVertex + indices[index];
+    }
+
+    // Write out degenerate triangles whenever we don't have a real index in order to keep our
+    // stride constant. Again, this can go away once we have atomics.
+    for (var i : u32 = indexCount; i < 15u; i = i + 1u) {
+      indicesOut.tris[firstIndex + i] = firstVertex;
     }
   }
 `;
