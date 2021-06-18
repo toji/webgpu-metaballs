@@ -226,18 +226,15 @@ export class MarchingCubes {
   
     // Record the triangle indices
     let triTableOffset = cubeIndex <<= 4;
-    while (triTable[triTableOffset] != -1 && (arrays.indexOffset + 3 < arrays.indices.length)) {
-      const i0 = triTable[triTableOffset++];
-      const i1 = triTable[triTableOffset++];
-      const i2 = triTable[triTableOffset++];
-      arrays.indices[arrays.indexOffset++] = indexList[i0];
-      arrays.indices[arrays.indexOffset++] = indexList[i1];
-      arrays.indices[arrays.indexOffset++] = indexList[i2];
+    const indexCount = triTable[triTableOffset++];
+    if (indexCount >= arrays.indices.length) {
+      // Not enough space in the index arrays for any more triangles.
+      return false;
+    }
 
-      if (arrays.indexOffset+3 >= arrays.indices.length) {
-        // Not enough space in the index arrays for any more triangles.
-        return false;
-      }
+    for (let i = 0; i < indexCount; ++i) {
+      const index = triTable[triTableOffset++];
+      arrays.indices[arrays.indexOffset++] = indexList[index];
     }
 
     return true;
