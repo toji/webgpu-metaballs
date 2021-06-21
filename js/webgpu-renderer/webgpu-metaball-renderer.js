@@ -584,24 +584,25 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       code: MetaballFieldComputeSource
     });
 
-    this.metaballComputePipeline = this.device.createComputePipeline({
+    this.device.createComputePipelineAsync({
       label: 'Metaball Isosurface Compute Pipeline',
       compute: { module: metaballModule, entryPoint: 'computeMain' }
-    });
-
-    this.metaballComputeBindGroup = this.device.createBindGroup({
-      layout: this.metaballComputePipeline.getBindGroupLayout(0),
-      entries: [{
-        binding: 0,
-        resource: {
-          buffer: this.metaballBuffer,
-        },
-      }, {
-        binding: 1,
-        resource: {
-          buffer: this.volumeBuffer,
-        },
-      }],
+    }).then((pipeline) => {
+      this.metaballComputePipeline = pipeline;
+      this.metaballComputeBindGroup = this.device.createBindGroup({
+        layout: this.metaballComputePipeline.getBindGroupLayout(0),
+        entries: [{
+          binding: 0,
+          resource: {
+            buffer: this.metaballBuffer,
+          },
+        }, {
+          binding: 1,
+          resource: {
+            buffer: this.volumeBuffer,
+          },
+        }],
+      });
     });
 
     // Create compute pipeline that handles the marching cubes triangulation.
@@ -610,39 +611,40 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       code: MarchingCubesComputeSource
     });
 
-    this.marchingCubesComputePipeline = this.device.createComputePipeline({
+    this.device.createComputePipelineAsync({
       label: 'Marching Cubes Compute Pipeline',
       compute: { module: marchingCubesModule, entryPoint: 'computeMain' }
-    });
-
-    this.marchingCubesComputeBindGroup = this.device.createBindGroup({
-      layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),
-      entries: [{
-        binding: 0,
-        resource: {
-          buffer: this.tablesBuffer,
-        },
-      }, {
-        binding: 1,
-        resource: {
-          buffer: this.volumeBuffer,
-        },
-      }, {
-        binding: 2,
-        resource: {
-          buffer: this.vertexBuffer,
-        },
-      }, {
-        binding: 3,
-        resource: {
-          buffer: this.normalBuffer,
-        },
-      }, {
-        binding: 4,
-        resource: {
-          buffer: this.indexBuffer,
-        },
-      }],
+    }).then((pipeline) => {;
+      this.marchingCubesComputePipeline = pipeline;
+      this.marchingCubesComputeBindGroup = this.device.createBindGroup({
+        layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),
+        entries: [{
+          binding: 0,
+          resource: {
+            buffer: this.tablesBuffer,
+          },
+        }, {
+          binding: 1,
+          resource: {
+            buffer: this.volumeBuffer,
+          },
+        }, {
+          binding: 2,
+          resource: {
+            buffer: this.vertexBuffer,
+          },
+        }, {
+          binding: 3,
+          resource: {
+            buffer: this.normalBuffer,
+          },
+        }, {
+          binding: 4,
+          resource: {
+            buffer: this.indexBuffer,
+          },
+        }],
+      });
     });
   }
 
@@ -671,15 +673,20 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     // Run the compute shader to fill the position/normal/index buffers.
     const commandEncoder = this.device.createCommandEncoder();
     const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(this.metaballComputePipeline);
-    passEncoder.setBindGroup(0, this.metaballComputeBindGroup);
-    passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
 
-    passEncoder.setPipeline(this.marchingCubesComputePipeline);
-    passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
-    passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+    if (this.metaballComputePipeline) {
+      passEncoder.setPipeline(this.metaballComputePipeline);
+      passEncoder.setBindGroup(0, this.metaballComputeBindGroup);
+      passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+    }
+
+    if (this.marchingCubesComputePipeline) {
+      passEncoder.setPipeline(this.marchingCubesComputePipeline);
+      passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
+      passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+    }
+
     passEncoder.endPass();
-
     this.device.queue.submit([commandEncoder.finish()]);
 
     this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
