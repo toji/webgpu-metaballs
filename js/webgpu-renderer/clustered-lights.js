@@ -53,7 +53,7 @@ export class ClusteredLightManager {
       }]
     });
 
-    this.clusterBoundsPipeline = device.createComputePipeline({
+    device.createComputePipelineAsync({
       layout: device.createPipelineLayout({
         bindGroupLayouts: [
           this.renderer.bindGroupLayouts.frame, // set 0
@@ -64,6 +64,8 @@ export class ClusteredLightManager {
         module: device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
         entryPoint: 'main',
       }
+    }).then((pipeline) => {
+      this.clusterBoundsPipeline = pipeline;
     });
 
     this.clusterStorageBindGroup = device.createBindGroup({
@@ -86,7 +88,7 @@ export class ClusteredLightManager {
       }]
     });
 
-    this.clusterLightsPipeline = device.createComputePipeline({
+    device.createComputePipelineAsync({
       layout: device.createPipelineLayout({
         bindGroupLayouts: [
           this.renderer.bindGroupLayouts.frame, // set 0
@@ -97,6 +99,8 @@ export class ClusteredLightManager {
         module: device.createShaderModule({ code: ClusterLightsSource, label: "Cluster Lights" }),
         entryPoint: 'main',
       }
+    }).then((pipeline) => {
+      this.clusterLightsPipeline = pipeline;
     });
 
     this.clusterBoundsBindGroup = device.createBindGroup({
@@ -112,6 +116,8 @@ export class ClusteredLightManager {
 
   updateClusterBounds(commandEncoder = null) {
     const device = this.renderer.device;
+
+    if (!this.clusterBoundsPipeline) { return; }
 
     const externalCommandEncoder = !!commandEncoder;
     if (!externalCommandEncoder) {
@@ -131,6 +137,8 @@ export class ClusteredLightManager {
 
   updateClusterLights(commandEncoder = null) {
     const device = this.renderer.device;
+
+    if (!this.clusterLightsPipeline) { return; }
 
     const externalCommandEncoder = !!commandEncoder;
     if (!externalCommandEncoder) {
