@@ -23,7 +23,8 @@ import {
   ClusterLightsSource,
   TILE_COUNT,
   TOTAL_TILES,
-  CLUSTER_LIGHTS_SIZE
+  CLUSTER_LIGHTS_SIZE,
+  MAX_LIGHTS_PER_CLUSTER
 } from './shaders/clustered-compute.js';
 import { BIND_GROUP } from './shaders/common.js';
 
@@ -53,7 +54,7 @@ export class ClusteredLightManager {
       }]
     });
 
-    device.createComputePipelineAsync({
+    this.clusterBoundsReady = device.createComputePipelineAsync({
       layout: device.createPipelineLayout({
         bindGroupLayouts: [
           this.renderer.bindGroupLayouts.frame, // set 0
@@ -117,7 +118,14 @@ export class ClusteredLightManager {
   updateClusterBounds(commandEncoder = null) {
     const device = this.renderer.device;
 
-    if (!this.clusterBoundsPipeline) { return; }
+    // If the cluster bounds pipeline isn't ready the first time we call this
+    // wait till it is ready and then call back into it again.
+    if (!this.clusterBoundsPipeline) {
+      this.clusterBoundsReady.then(() => {
+        this.updateClusterBounds();
+      });
+      return;
+    }
 
     const externalCommandEncoder = !!commandEncoder;
     if (!externalCommandEncoder) {

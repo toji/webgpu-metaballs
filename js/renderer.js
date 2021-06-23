@@ -187,6 +187,10 @@ export class Renderer {
       this.canvas.width = this.canvas.clientWidth * scalar;
       this.canvas.height = this.canvas.clientHeight * scalar;
 
+      if (this.canvas.width == 0 || this.canvas.height == 0) {
+        return;
+      }
+
       this.outputSize[0] = this.canvas.width;
       this.outputSize[1] = this.canvas.height;
 
