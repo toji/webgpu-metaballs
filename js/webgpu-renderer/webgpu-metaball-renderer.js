@@ -578,6 +578,12 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
     });
 
+    this.indirectArray = new Uint32Array(6);
+    this.indirectBuffer = this.device.createBuffer({
+      size: this.indirectArray.byteLength,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
+
     // Create compute pipeline that handles the metaball isosurface.
     const metaballModule = this.device.createShaderModule({
       label: 'Metaball Isosurface Compute Shader',
@@ -643,7 +649,12 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
           resource: {
             buffer: this.indexBuffer,
           },
-        }],
+        }, /*{
+          binding: 5,
+          resource: {
+            buffer: this.indirectBuffer,
+          },
+        }*/],
       });
     });
   }
@@ -664,6 +675,9 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     // Update the metaball buffer with the latest metaball values.
     this.device.queue.writeBuffer(this.metaballBuffer, 0, this.metaballArray);
+
+    // Zero out the indirect buffer every time.
+    this.device.queue.writeBuffer(this.indirectBuffer, 0, this.indirectArray);
   }
 
   update(marchingCubes) {

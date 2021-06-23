@@ -106,6 +106,16 @@ export const MarchingCubesComputeSource = `
   };
   [[group(0), binding(4)]] var<storage, write> indicesOut : IndexBuffer;
 
+  //[[block]] struct DrawIndirectArgs {
+  //  vertexCount : atomic<u32>;
+  //  indexCount : atomic<u32>;
+  //  instanceCount : u32;
+  //  firstIndex : u32;
+  //  baseVertex : u32;
+  //  firstInstance : u32;
+  //};
+  //[[group(0), binding(5)]] var<storage, read_write> drawOut : DrawIndirectArgs;
+
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {
     // Don't index outside of the volume bounds.
