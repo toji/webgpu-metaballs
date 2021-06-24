@@ -106,15 +106,15 @@ export const MarchingCubesComputeSource = `
   };
   [[group(0), binding(4)]] var<storage, write> indicesOut : IndexBuffer;
 
-  //[[block]] struct DrawIndirectArgs {
-  //  vertexCount : atomic<u32>;
-  //  indexCount : atomic<u32>;
-  //  instanceCount : u32;
-  //  firstIndex : u32;
-  //  baseVertex : u32;
-  //  firstInstance : u32;
-  //};
-  //[[group(0), binding(5)]] var<storage, read_write> drawOut : DrawIndirectArgs;
+  [[block]] struct DrawIndirectArgs {
+    vertexCount : atomic<u32>;
+    indexCount : atomic<u32>;
+    instanceCount : u32;
+    firstIndex : u32;
+    baseVertex : u32;
+    firstInstance : u32;
+  };
+  [[group(0), binding(5)]] var<storage, read_write> drawOut : DrawIndirectArgs;
 
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {
@@ -235,15 +235,16 @@ export const MarchingCubesComputeSource = `
     let indexCount : u32 = u32(tables.tris[triTableOffset - 1u]);
 
     // In an ideal world this offset is tracked as an atomic.
-    // let firstVertex = atomicAdd(vertexCount, cubeVerts);
-    // let firstIndex = atomicAdd(indexCount, indexCount);
+    let vertexCount : u32 = cubeVerts;
+    let firstVertex : u32 = atomicAdd(&drawOut.vertexCount, vertexCount);
+    //let firstIndex : u32 = atomicAdd(&drawOut.indexCount, indexCount);
 
     // Instead we have to pad the vertex/index buffers with the maximum possible number of values
     // and create degenerate triangles to fill the empty space, which is a waste of GPU cycles.
     let bufferOffset : u32 = (global_id.x +
                               global_id.y * volume.size.x +
                               global_id.z * volume.size.x * volume.size.y);
-    let firstVertex : u32 = bufferOffset*12u;
+    //let firstVertex : u32 = bufferOffset*12u;
     let firstIndex : u32 = bufferOffset*15u;
 
     // Copy positions to output buffer

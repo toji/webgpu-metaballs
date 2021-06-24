@@ -23,10 +23,11 @@ import {
   ClusterLightsSource,
   TILE_COUNT,
   TOTAL_TILES,
-  CLUSTER_LIGHTS_SIZE,
-  MAX_LIGHTS_PER_CLUSTER
+  CLUSTER_LIGHTS_SIZE
 } from './shaders/clustered-compute.js';
 import { BIND_GROUP } from './shaders/common.js';
+
+const emptyArray = new Uint32Array(1);
 
 export class ClusteredLightManager {
   constructor(renderer) {
@@ -35,8 +36,8 @@ export class ClusteredLightManager {
 
     const device = renderer.device;
     this.clusterLightsBuffer = device.createBuffer({
-      size: CLUSTER_LIGHTS_SIZE * TOTAL_TILES,
-      usage: GPUBufferUsage.STORAGE
+      size: CLUSTER_LIGHTS_SIZE,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
     this.clusterBoundsBuffer = device.createBuffer({
@@ -147,6 +148,9 @@ export class ClusteredLightManager {
     const device = this.renderer.device;
 
     if (!this.clusterLightsPipeline) { return; }
+
+    // Reset the light offset counter to 0 before populating the light clusters.
+    device.queue.writeBuffer(this.clusterLightsBuffer, 0, emptyArray);
 
     const externalCommandEncoder = !!commandEncoder;
     if (!externalCommandEncoder) {
