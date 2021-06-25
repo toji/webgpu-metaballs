@@ -99,16 +99,16 @@ export class WebGPURenderer extends Renderer {
       // attachment is acquired and set in onFrame.
       resolveTarget: undefined,
       loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-      storeOp: 'store',
+      storeOp: 'clear', // Discards the multisampled view, not the resolveTarget
     };
 
     this.depthAttachment = {
       // view is acquired and set in onResize.
       view: undefined,
       depthLoadValue: 1.0,
-      depthStoreOp: 'store',
+      depthStoreOp: 'clear',
       stencilLoadValue: 0,
-      stencilStoreOp: 'store',
+      stencilStoreOp: 'clear',
     };
 
     this.renderPassDescriptor = {
