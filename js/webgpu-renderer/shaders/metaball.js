@@ -57,11 +57,11 @@ export const MetaballFieldComputeSource = `
   }
 
   fn surfaceFunc(position : vec3<f32>) -> f32 {
-    var result : f32 = 0.0;
-    for (var i : u32 = 0u; i < metaballs.ballCount; i = i + 1u) {
-      let ball : Metaball = metaballs.balls[i];
-      let dist : f32 = distance(position, ball.position);
-      let val : f32 = ball.strength / (0.000001 + (dist * dist)) - ball.subtract;
+    var result = 0.0;
+    for (var i = 0u; i < metaballs.ballCount; i = i + 1u) {
+      let ball = metaballs.balls[i];
+      let dist = distance(position, ball.position);
+      let val = ball.strength / (0.000001 + (dist * dist)) - ball.subtract;
       if (val > 0.0) {
         result = result + val;
       }
@@ -71,10 +71,10 @@ export const MetaballFieldComputeSource = `
 
   [[stage(compute)]]
   fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
-    let position : vec3<f32> = positionAt(global_id);
-    let valueIndex : u32 = global_id.x +
-                          (global_id.y * volume.size.x) +
-                          (global_id.z * volume.size.x * volume.size.y);
+    let position = positionAt(global_id);
+    let valueIndex = global_id.x +
+                    (global_id.y * volume.size.x) +
+                    (global_id.z * volume.size.x * volume.size.y);
     
     volume.values[valueIndex] = surfaceFunc(position);
   }
@@ -121,9 +121,9 @@ export const MarchingCubesComputeSource = `
     // Don't index outside of the volume bounds.
     if (any(index >= volume.size)) { return 0.0; }
 
-    let valueIndex : u32 = index.x +
-                          (index.y * volume.size.x) +
-                          (index.z * volume.size.x * volume.size.y);
+    let valueIndex = index.x +
+                    (index.y * volume.size.x) +
+                    (index.z * volume.size.x * volume.size.y);
     return volume.values[valueIndex];
   }
 
@@ -146,11 +146,11 @@ export const MarchingCubesComputeSource = `
   var<private> cubeVerts : u32 = 0u;
 
   fn interpX(index : u32, i : vec3<u32>, va : f32, vb : f32) {
-    let mu : f32 = (volume.threshold - va) / (vb - va);
+    let mu = (volume.threshold - va) / (vb - va);
     positions[cubeVerts] = positionAt(i) + vec3<f32>(volume.step.x * mu, 0.0, 0.0);
 
-    let na : vec3<f32> = normalAt(i);
-    let nb : vec3<f32> = normalAt(i + vec3<u32>(1u, 0u, 0u));
+    let na = normalAt(i);
+    let nb = normalAt(i + vec3<u32>(1u, 0u, 0u));
     normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
 
     indices[index] = cubeVerts;
@@ -158,11 +158,11 @@ export const MarchingCubesComputeSource = `
   }
 
   fn interpY(index : u32, i : vec3<u32>, va : f32, vb : f32) {
-    let mu : f32 = (volume.threshold - va) / (vb - va);
+    let mu = (volume.threshold - va) / (vb - va);
     positions[cubeVerts] = positionAt(i) + vec3<f32>(0.0, volume.step.y * mu, 0.0);
 
-    let na : vec3<f32> = normalAt(i);
-    let nb : vec3<f32> = normalAt(i + vec3<u32>(0u, 1u, 0u));
+    let na = normalAt(i);
+    let nb = normalAt(i + vec3<u32>(0u, 1u, 0u));
     normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
 
     indices[index] = cubeVerts;
@@ -170,11 +170,11 @@ export const MarchingCubesComputeSource = `
   }
 
   fn interpZ(index : u32, i : vec3<u32>, va : f32, vb : f32) {
-    let mu : f32 = (volume.threshold - va) / (vb - va);
+    let mu = (volume.threshold - va) / (vb - va);
     positions[cubeVerts] = positionAt(i) + vec3<f32>(0.0, 0.0, volume.step.z * mu);
 
-    let na : vec3<f32> = normalAt(i);
-    let nb : vec3<f32> = normalAt(i + vec3<u32>(0u, 0u, 1u));
+    let na = normalAt(i);
+    let nb = normalAt(i + vec3<u32>(0u, 0u, 1u));
     normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
 
     indices[index] = cubeVerts;
@@ -185,25 +185,25 @@ export const MarchingCubesComputeSource = `
   [[stage(compute)]]
   fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     // Cache the values we're going to be referencing frequently.
-    let i0 : vec3<u32> = global_id;
-    let i1 : vec3<u32> = global_id + vec3<u32>(1u, 0u, 0u);
-    let i2 : vec3<u32> = global_id + vec3<u32>(1u, 1u, 0u);
-    let i3 : vec3<u32> = global_id + vec3<u32>(0u, 1u, 0u);
-    let i4 : vec3<u32> = global_id + vec3<u32>(0u, 0u, 1u);
-    let i5 : vec3<u32> = global_id + vec3<u32>(1u, 0u, 1u);
-    let i6 : vec3<u32> = global_id + vec3<u32>(1u, 1u, 1u);
-    let i7 : vec3<u32> = global_id + vec3<u32>(0u, 1u, 1u);
+    let i0 = global_id;
+    let i1 = global_id + vec3<u32>(1u, 0u, 0u);
+    let i2 = global_id + vec3<u32>(1u, 1u, 0u);
+    let i3 = global_id + vec3<u32>(0u, 1u, 0u);
+    let i4 = global_id + vec3<u32>(0u, 0u, 1u);
+    let i5 = global_id + vec3<u32>(1u, 0u, 1u);
+    let i6 = global_id + vec3<u32>(1u, 1u, 1u);
+    let i7 = global_id + vec3<u32>(0u, 1u, 1u);
 
-    let v0 : f32 = valueAt(i0);
-    let v1 : f32 = valueAt(i1);
-    let v2 : f32 = valueAt(i2);
-    let v3 : f32 = valueAt(i3);
-    let v4 : f32 = valueAt(i4);
-    let v5 : f32 = valueAt(i5);
-    let v6 : f32 = valueAt(i6);
-    let v7 : f32 = valueAt(i7);
+    let v0 = valueAt(i0);
+    let v1 = valueAt(i1);
+    let v2 = valueAt(i2);
+    let v3 = valueAt(i3);
+    let v4 = valueAt(i4);
+    let v5 = valueAt(i5);
+    let v6 = valueAt(i6);
+    let v7 = valueAt(i7);
 
-    var cubeIndex : u32 = 0u;
+    var cubeIndex = 0u;
     if (v0 < volume.threshold) { cubeIndex = cubeIndex | 1u; }
     if (v1 < volume.threshold) { cubeIndex = cubeIndex | 2u; }
     if (v2 < volume.threshold) { cubeIndex = cubeIndex | 4u; }
@@ -213,7 +213,7 @@ export const MarchingCubesComputeSource = `
     if (v6 < volume.threshold) { cubeIndex = cubeIndex | 64u; }
     if (v7 < volume.threshold) { cubeIndex = cubeIndex | 128u; }
 
-    let edges : u32 = tables.edges[cubeIndex];
+    let edges = tables.edges[cubeIndex];
 
     // Once we have atomics we can early-terminate here if edges == 0
     //if (edges == 0u) { return; }
@@ -231,24 +231,22 @@ export const MarchingCubesComputeSource = `
     if ((edges & 1024u) != 0u) { interpZ(10u, i2, v2, v6); }
     if ((edges & 2048u) != 0u) { interpZ(11u, i3, v3, v7); }
 
-    let triTableOffset : u32 = (cubeIndex << 4u) + 1u;
-    let indexCount : u32 = u32(tables.tris[triTableOffset - 1u]);
+    let triTableOffset = (cubeIndex << 4u) + 1u;
+    let indexCount = u32(tables.tris[triTableOffset - 1u]);
 
     // In an ideal world this offset is tracked as an atomic.
-    let vertexCount : u32 = cubeVerts;
-    let firstVertex : u32 = atomicAdd(&drawOut.vertexCount, vertexCount);
-    //let firstIndex : u32 = atomicAdd(&drawOut.indexCount, indexCount);
+    let firstVertex = atomicAdd(&drawOut.vertexCount, cubeVerts);
+    //let firstIndex = atomicAdd(&drawOut.indexCount, indexCount);
 
     // Instead we have to pad the vertex/index buffers with the maximum possible number of values
     // and create degenerate triangles to fill the empty space, which is a waste of GPU cycles.
-    let bufferOffset : u32 = (global_id.x +
-                              global_id.y * volume.size.x +
-                              global_id.z * volume.size.x * volume.size.y);
-    //let firstVertex : u32 = bufferOffset*12u;
-    let firstIndex : u32 = bufferOffset*15u;
+    let bufferOffset = (global_id.x +
+                        global_id.y * volume.size.x +
+                        global_id.z * volume.size.x * volume.size.y);
+    let firstIndex = bufferOffset*15u;
 
     // Copy positions to output buffer
-    for (var i : u32 = 0u; i < cubeVerts; i = i + 1u) {
+    for (var i = 0u; i < cubeVerts; i = i + 1u) {
       positionsOut.values[firstVertex*3u + i*3u] = positions[i].x;
       positionsOut.values[firstVertex*3u + i*3u + 1u] = positions[i].y;
       positionsOut.values[firstVertex*3u + i*3u + 2u] = positions[i].z;
@@ -259,14 +257,14 @@ export const MarchingCubesComputeSource = `
     }
 
     // Write out the indices
-    for (var i : u32 = 0u; i < indexCount; i = i + 1u) {
-      let index : i32 = tables.tris[triTableOffset + i];
+    for (var i = 0u; i < indexCount; i = i + 1u) {
+      let index = tables.tris[triTableOffset + i];
       indicesOut.tris[firstIndex + i] = firstVertex + indices[index];
     }
 
     // Write out degenerate triangles whenever we don't have a real index in order to keep our
     // stride constant. Again, this can go away once we have atomics.
-    for (var i : u32 = indexCount; i < 15u; i = i + 1u) {
+    for (var i = indexCount; i < 15u; i = i + 1u) {
       indicesOut.tris[firstIndex + i] = firstVertex;
     }
   }
@@ -314,16 +312,16 @@ export const MetaballFragmentSource = `
 
   [[stage(fragment)]]
   fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
-    let normal : vec3<f32> = normalize(input.normal);
+    let normal = normalize(input.normal);
 
     var blending : vec3<f32> = abs(normal);
     blending = normalize(max(blending, vec3<f32>(0.00001, 0.00001, 0.00001))); // Force weights to sum to 1.0
 
-    let xTex : vec4<f32> = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
-    let yTex : vec4<f32> = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
-    let zTex : vec4<f32> = textureSample(baseTexture, baseSampler, input.worldPosition.xy + input.flow.xy);
+    let xTex = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
+    let yTex = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
+    let zTex = textureSample(baseTexture, baseSampler, input.worldPosition.xy + input.flow.xy);
     // blend the results of the 3 planar projections.
-    let tex : vec4<f32> = xTex * blending.x + yTex * blending.y + zTex * blending.z;
+    let tex = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
     return vec4<f32>(linearTosRGB(tex.xyz), 1.0);
   }
