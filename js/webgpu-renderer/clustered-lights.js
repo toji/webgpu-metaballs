@@ -21,7 +21,7 @@
 import {
   ClusterBoundsSource,
   ClusterLightsSource,
-  TILE_COUNT,
+  DISPATCH_SIZE,
   TOTAL_TILES,
   CLUSTER_LIGHTS_SIZE
 } from './shaders/clustered-compute.js';
@@ -136,7 +136,7 @@ export class ClusteredLightManager {
     passEncoder.setPipeline(this.clusterBoundsPipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
     passEncoder.setBindGroup(1, this.clusterStorageBindGroup);
-    passEncoder.dispatch(...TILE_COUNT);
+    passEncoder.dispatch(...DISPATCH_SIZE);
     passEncoder.endPass();
 
     if (!externalCommandEncoder) {
@@ -163,7 +163,7 @@ export class ClusteredLightManager {
     passEncoder.setPipeline(this.clusterLightsPipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
     passEncoder.setBindGroup(1, this.clusterBoundsBindGroup);
-    passEncoder.dispatch(...TILE_COUNT);
+    passEncoder.dispatch(...DISPATCH_SIZE);
     passEncoder.endPass();
 
     if (!externalCommandEncoder) {
