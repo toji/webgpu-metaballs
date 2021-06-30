@@ -145,19 +145,7 @@ export class Renderer {
 
     this.metaballs = new Metaballs();
     this.drawMetaballs = true;
-    this.uploadMethod = null;
-
-    this.marchingCubes = new MarchingCubes({
-      xMin: -1,
-      xMax: 1,
-      xStep: 0.1,
-      yMin: -0.1,
-      yMax: 2.5,
-      yStep: 0.1,
-      zMin: -1,
-      zMax: 1,
-      zStep: 0.1,
-    });
+    this.marchingCubes = null;
 
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
@@ -291,6 +279,20 @@ export class Renderer {
         this.lightManager.lightCount = this.sceneLightCount;
         break;
     }
+  }
+
+  setMetaballStep(step) {
+    this.marchingCubes = new MarchingCubes({
+      xMin: -1,
+      xMax: 1,
+      xStep: step,
+      yMin: -0.1,
+      yMax: 2.5,
+      yStep: step,
+      zMin: -1,
+      zMax: 1,
+      zStep: step,
+    });
   }
 
   updateMetaballs(timestamp) {

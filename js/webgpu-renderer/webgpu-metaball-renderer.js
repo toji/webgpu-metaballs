@@ -26,9 +26,6 @@ import {
   MarchingCubesTriTable,
 } from "../marching-cubes-tables.js";
 
-const METABALLS_VERTEX_BUFFER_SIZE = (Float32Array.BYTES_PER_ELEMENT * 3) * 8196;
-const METABALLS_INDEX_BUFFER_SIZE = Uint32Array.BYTES_PER_ELEMENT * 16384;
-
 const MAX_METABALLS = 32;
 
 // Common assets used by every variant of the Metaball renderer
@@ -38,8 +35,13 @@ class WebGPUMetaballRendererBase {
     this.device = renderer.device;
     this.volume = volume;
 
-    this.vertexBufferSize = METABALLS_VERTEX_BUFFER_SIZE;
-    this.indexBufferSize = METABALLS_INDEX_BUFFER_SIZE;
+    // Computes buffer sizes large enough for the maximum possible number of triangles in that volume
+    this.marchingCubeCells = (volume.width-1) * (volume.height-1) * (volume.depth-1);
+    this.vertexBufferSize = (Float32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
+    this.indexBufferSize = Uint32Array.BYTES_PER_ELEMENT * 15 * this.marchingCubeCells;
+
+    //this.vertexBufferSize = METABALLS_VERTEX_BUFFER_SIZE;
+    //this.indexBufferSize = METABALLS_INDEX_BUFFER_SIZE;
 
     this.indexCount = 0;
 
