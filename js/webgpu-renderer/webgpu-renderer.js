@@ -61,6 +61,7 @@ export class WebGPURenderer extends Renderer {
     this.context = this.canvas.getContext('gpupresent');
 
     this.gpuStats = new GPUStats();
+    this.metaballMethod = null;
   }
 
   async init() {
@@ -314,6 +315,7 @@ export class WebGPURenderer extends Renderer {
 
     this.metaballRenderer = new rendererConstructor(this, this.marchingCubes.volume);
     this.metaballsNeedUpdate = true;
+    this.metaballMethod = method;
   }
 
   async setMetaballStyle(style) {
@@ -331,6 +333,11 @@ export class WebGPURenderer extends Renderer {
         resource: metaballTexture.texture.createView(),
       }],
     });
+  }
+
+  setMetaballStep(step) {
+    super.setMetaballStep(step);
+    this.setMetaballMethod(this.metaballMethod);
   }
 
   async updateMetaballs(timestamp) {

@@ -77,6 +77,7 @@
         environmentLights: true,
         metaballLights: true,
         metaballStyle: 'lava',
+        metaballResolution: 0.075
       };
 
       let gui = new dat.GUI();
@@ -129,6 +130,16 @@
         renderer.setMetaballStyle(appSettings.metaballStyle);
       });
 
+      rendering.add(appSettings, 'metaballResolution', {
+        low: 0.2,
+        medium: 0.1,
+        high: 0.075,
+        ultra: 0.05,
+        "CPU melting": 0.03,
+      }).onChange(() => {
+        renderer.setMetaballStep(appSettings.metaballResolution);
+      });
+
       document.body.appendChild(gui.domElement);
 
       async function init() {
@@ -147,8 +158,10 @@
           renderer.updateLightRange(appSettings.maxLightRange);
           renderer.lightManager.render = appSettings.renderLightSprites;
           renderer.renderEnvironment = appSettings.renderEnvironment;
+          renderer.setMetaballStep(appSettings.metaballResolution);
           renderer.setMetaballStyle(appSettings.metaballStyle);
           renderer.setMetaballMethod(appSettings.metaballMethod);
+          
 
           renderer.start();
 
