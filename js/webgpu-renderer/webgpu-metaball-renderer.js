@@ -18,7 +18,8 @@ import {
   MetaballVertexSource,
   MetaballFragmentSource,
   MetaballFieldComputeSource,
-  MarchingCubesComputeSource
+  MarchingCubesComputeSource,
+  WORKGROUP_SIZE
 } from './shaders/metaball.js';
 import {
   MarchingCubesEdgeTable,
@@ -688,16 +689,22 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     const commandEncoder = this.device.createCommandEncoder();
     const passEncoder = commandEncoder.beginComputePass();
 
+    const dispatchSize = [
+      this.volume.width / WORKGROUP_SIZE[0],
+      this.volume.height / WORKGROUP_SIZE[1],
+      this.volume.depth / WORKGROUP_SIZE[2]
+    ];
+
     if (this.metaballComputePipeline) {
       passEncoder.setPipeline(this.metaballComputePipeline);
       passEncoder.setBindGroup(0, this.metaballComputeBindGroup);
-      passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+      passEncoder.dispatch(...dispatchSize);
     }
 
     if (this.marchingCubesComputePipeline) {
       passEncoder.setPipeline(this.marchingCubesComputePipeline);
       passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
-      passEncoder.dispatch(this.volume.width, this.volume.height, this.volume.depth);
+      passEncoder.dispatch(...dispatchSize);
     }
 
     passEncoder.endPass();

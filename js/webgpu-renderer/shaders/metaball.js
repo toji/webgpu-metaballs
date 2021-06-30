@@ -24,6 +24,8 @@ import {
   MarchingCubesTriTable,
 } from "../../marching-cubes-tables.js";
 
+export const WORKGROUP_SIZE = [4, 4, 4];
+
 const IsosurfaceVolume = `
   [[block]] struct IsosurfaceVolume {
     min: vec3<f32>;
@@ -69,7 +71,7 @@ export const MetaballFieldComputeSource = `
     return result;
   }
 
-  [[stage(compute)]]
+  [[stage(compute), workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})]]
   fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     let position = positionAt(global_id);
     let valueIndex = global_id.x +
@@ -182,7 +184,7 @@ export const MarchingCubesComputeSource = `
   }
 
   // Main marching cubes algorithm
-  [[stage(compute)]]
+  [[stage(compute), workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})]]
   fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
