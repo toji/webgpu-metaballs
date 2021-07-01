@@ -109,12 +109,16 @@ export const MarchingCubesComputeSource = `
   [[group(0), binding(4)]] var<storage, write> indicesOut : IndexBuffer;
 
   [[block]] struct DrawIndirectArgs {
-    vertexCount : atomic<u32>;
-    indexCount : atomic<u32>;
-    instanceCount : u32;
-    firstIndex : u32;
-    baseVertex : u32;
+    vc : u32;
+    vertexCount : atomic<u32>; // Actually instance count, treated as vertex count for point cloud rendering.
+    firstVertex : u32;
     firstInstance : u32;
+
+    indexCount : atomic<u32>;
+    indexedInstanceCount : u32;
+    indexedFirstIndex : u32;
+    indexedBaseVertex : u32;
+    indexedFirstInstance : u32;
   };
   [[group(0), binding(5)]] var<storage, read_write> drawOut : DrawIndirectArgs;
 
@@ -326,5 +330,72 @@ export const MetaballFragmentSource = `
     let tex = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
     return vec4<f32>(linearTosRGB(tex.xyz), 1.0);
+  }
+`;
+
+// For visualizing the metaballs as a point cloud
+export const MetaballVertexPointSource = `
+  ${ProjectionUniforms}
+  ${ViewUniforms}
+
+  var<private> pos : array<vec2<f32>, 4> = array<vec2<f32>, 4>(
+    vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0)
+  );
+
+  struct VertexInput {
+    [[location(${ATTRIB_MAP.POSITION})]] position : vec3<f32>;
+    [[location(${ATTRIB_MAP.NORMAL})]] normal : vec3<f32>;
+    [[builtin(vertex_index)]] vertexIndex : u32;
+  };
+
+  struct VertexOutput {
+    [[location(0)]] worldPosition : vec3<f32>;
+    [[location(1)]] normal : vec3<f32>;
+    [[location(2)]] flow : vec3<f32>;
+    [[builtin(position)]] position : vec4<f32>;
+  };
+
+  [[stage(vertex)]]
+  fn vertexMain(input : VertexInput) -> VertexOutput {
+    var output : VertexOutput;
+    output.worldPosition = input.position;
+    output.normal = input.normal;
+    output.flow = vec3<f32>(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+
+    var bbModelViewMatrix : mat4x4<f32>;
+    bbModelViewMatrix[3] = vec4<f32>(input.position, 1.0);
+    bbModelViewMatrix = view.matrix * bbModelViewMatrix;
+    bbModelViewMatrix[0][0] = 1.0;
+    bbModelViewMatrix[0][1] = 0.0;
+    bbModelViewMatrix[0][2] = 0.0;
+
+    bbModelViewMatrix[1][0] = 0.0;
+    bbModelViewMatrix[1][1] = 1.0;
+    bbModelViewMatrix[1][2] = 0.0;
+
+    bbModelViewMatrix[2][0] = 0.0;
+    bbModelViewMatrix[2][1] = 0.0;
+    bbModelViewMatrix[2][2] = 1.0;
+
+    output.position = projection.matrix * bbModelViewMatrix * vec4<f32>(pos[input.vertexIndex] * 0.005, 0.0, 1.0);
+    return output;
+  }
+`;
+
+export const MetaballFragmentPointSource = `
+  ${ColorConversions}
+
+  [[group(1), binding(0)]] var baseSampler : sampler;
+  [[group(1), binding(1)]] var baseTexture : texture_2d<f32>;
+
+  struct VertexOutput {
+    [[location(0)]] worldPosition : vec3<f32>;
+    [[location(1)]] normal : vec3<f32>;
+    [[location(2)]] flow : vec3<f32>;
+  };
+
+  [[stage(fragment)]]
+  fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
   }
 `;
