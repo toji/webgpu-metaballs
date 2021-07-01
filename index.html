@@ -89,6 +89,7 @@
         'Single staging buffer re-mapped each frame': 'singleStaging',
         'Ring of staging buffers': 'stagingRing',
         'Compute shader': 'gpuGenerated',
+        'Point Cloud': 'pointCloud'
       }).onChange(() => {
         if (renderer) {
           renderer.setMetaballMethod(appSettings.metaballMethod);

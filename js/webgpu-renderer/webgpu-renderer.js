@@ -37,6 +37,7 @@ import {
   MetaballSingleStagingBuffer,
   MetaballStagingBufferRing,
   MetaballComputeRenderer,
+  MetaballComputePointRenderer,
 } from './webgpu-metaball-renderer.js';
 
 const MetaballMethods = {
@@ -46,6 +47,7 @@ const MetaballMethods = {
   singleStaging: MetaballSingleStagingBuffer,
   stagingRing: MetaballStagingBufferRing,
   gpuGenerated: MetaballComputeRenderer,
+  pointCloud: MetaballComputePointRenderer,
 };
 
 const SAMPLE_COUNT = 4;
@@ -100,16 +102,16 @@ export class WebGPURenderer extends Renderer {
       // attachment is acquired and set in onFrame.
       resolveTarget: undefined,
       loadValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-      storeOp: 'clear', // Discards the multisampled view, not the resolveTarget
+      storeOp: 'discard', // Discards the multisampled view, not the resolveTarget
     };
 
     this.depthAttachment = {
       // view is acquired and set in onResize.
       view: undefined,
       depthLoadValue: 1.0,
-      depthStoreOp: 'clear',
+      depthStoreOp: 'discard',
       stencilLoadValue: 0,
-      stencilStoreOp: 'clear',
+      stencilStoreOp: 'discard',
     };
 
     this.renderPassDescriptor = {

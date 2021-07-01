@@ -19,6 +19,8 @@ import {
   MetaballFragmentSource,
   MetaballFieldComputeSource,
   MarchingCubesComputeSource,
+  MetaballVertexPointSource,
+  MetaballFragmentPointSource,
   WORKGROUP_SIZE
 } from './shaders/metaball.js';
 import {
@@ -581,10 +583,11 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
     });
 
-    this.indirectArray = new Uint32Array(6);
+    this.indirectArray = new Uint32Array(9);
+    this.indirectArray[0] = 4;
     this.indirectBuffer = this.device.createBuffer({
       size: this.indirectArray.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
     });
 
     // Create compute pipeline that handles the metaball isosurface.
@@ -726,4 +729,72 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
   }*/
 
   // TODO: DrawIndirect once the buffers are dynamically packed.
+}
+
+export class MetaballComputePointRenderer extends MetaballComputeRenderer {
+  constructor(renderer, volume) {
+    super(renderer, volume);
+
+    this.pipeline = this.device.createRenderPipeline({
+      layout: this.device.createPipelineLayout({
+        bindGroupLayouts: [
+          this.renderer.bindGroupLayouts.frame,
+          this.renderer.bindGroupLayouts.metaball
+        ]
+      }),
+      vertex: {
+        module: this.device.createShaderModule({ code: MetaballVertexPointSource }),
+        entryPoint: "vertexMain",
+        buffers: [{
+          arrayStride: 12,
+          stepMode: 'instance',
+          attributes: [{
+            shaderLocation: ATTRIB_MAP.POSITION,
+            format: 'float32x3',
+            offset: 0,
+            
+          }],
+        }, {
+          arrayStride: 12,
+          stepMode: 'instance',
+          attributes: [{
+            shaderLocation: ATTRIB_MAP.NORMAL,
+            format: 'float32x3',
+            offset: 0,
+          }],
+        }]
+      },
+      fragment: {
+        module: this.device.createShaderModule({ code: MetaballFragmentPointSource }),
+        entryPoint: "fragmentMain",
+        targets: [{
+          format: this.renderer.contextFormat,
+        }]
+      },
+      primitive: {
+        topology: 'triangle-strip',
+        stripIndexFormat: 'uint32',
+        cullMode: 'none',
+      },
+      depthStencil: {
+        format: this.renderer.renderBundleDescriptor.depthStencilFormat,
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+      },
+      multisample: {
+        count: this.renderer.renderBundleDescriptor.sampleCount
+      }
+    });
+  }
+
+  draw(passEncoder) {
+    if (this.indexCount) {
+      passEncoder.setPipeline(this.pipeline);
+      passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
+      passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
+      passEncoder.setVertexBuffer(0, this.vertexBuffer);
+      passEncoder.setVertexBuffer(1, this.normalBuffer);
+      passEncoder.drawIndirect(this.indirectBuffer, 0);
+    }
+  }
 }
