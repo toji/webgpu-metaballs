@@ -60,7 +60,7 @@ export class WebGPURenderer extends Renderer {
     this.sampleCount = SAMPLE_COUNT;
     this.depthFormat = DEPTH_FORMAT;
 
-    this.context = this.canvas.getContext('gpupresent');
+    this.context = this.canvas.getContext('webgpu');
 
     this.gpuStats = new GPUStats();
     this.metaballMethod = null;
