@@ -241,7 +241,7 @@ export const MarchingCubesComputeSource = `
     let indexCount = u32(tables.tris[triTableOffset - 1u]);
 
     // In an ideal world this offset is tracked as an atomic.
-    let firstVertex = atomicAdd(&drawOut.vertexCount, cubeVerts);
+    var firstVertex = atomicAdd(&drawOut.vertexCount, cubeVerts);
     //let firstIndex = atomicAdd(&drawOut.indexCount, indexCount);
 
     // Instead we have to pad the vertex/index buffers with the maximum possible number of values
@@ -250,6 +250,7 @@ export const MarchingCubesComputeSource = `
                         global_id.y * volume.size.x +
                         global_id.z * volume.size.x * volume.size.y);
     let firstIndex = bufferOffset*15u;
+    //firstVertex = bufferOffset*12u;
 
     // Copy positions to output buffer
     for (var i = 0u; i < cubeVerts; i = i + 1u) {
