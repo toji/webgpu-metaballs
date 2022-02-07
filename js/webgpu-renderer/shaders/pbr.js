@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { wgsl } from '../wgsl-debug-helper.js';
+import { wgsl } from 'wgsl-preprocessor';
 import { ProjectionUniforms, ViewUniforms, ModelUniforms, LightUniforms, MaterialUniforms, ColorConversions, ATTRIB_MAP } from '../shaders/common.js';
 import { ClusterLightsStructs, TileFunctions } from '../shaders/clustered-compute.js';
 

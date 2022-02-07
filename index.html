@@ -45,6 +45,7 @@
         "imports": {
             "gl-matrix": "./node_modules/gl-matrix/dist/esm/index.js",
             "webgpu-texture-loader": "./node_modules/web-texture-tool/build/webgpu-texture-loader.js",
+            "wgsl-preprocessor": "./node_modules/wgsl-preprocessor/wgsl-preprocessor.js",
             "dat.gui": "./node_modules/dat.gui/build/dat.gui.module.js",
             "stats.js": "./node_modules/stats.js/src/Stats.js"
         }
@@ -164,7 +165,7 @@
           renderer.setMetaballStep(appSettings.metaballResolution);
           renderer.setMetaballStyle(appSettings.metaballStyle);
           renderer.setMetaballMethod(appSettings.metaballMethod);
-          
+
 
           renderer.start();
 

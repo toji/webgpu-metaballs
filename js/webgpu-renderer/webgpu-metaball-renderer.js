@@ -143,7 +143,7 @@ class WebGPUMetaballRendererBase {
  * writeBuffer() is a convenice function that copies from an ArrayBuffer into a GPUBuffer in
  * whatever way the user agent deems best. In many scenarios this can be one of the most efficent
  * routes.
- * 
+ *
  * Advantages:
  *  - Lowest overall complexity.
  *  - If your data is already in an ArrayBuffer, this will handle the copy for you.
@@ -151,7 +151,7 @@ class WebGPUMetaballRendererBase {
  *    when using mapped buffers anyway.
  *  - Avoids the need to set the contents of a mapped buffer's array to zero before returning it.
  *  - Allows the user agent to pick an optimal pattern for uploading the data to the GPU.
- * 
+ *
  * Disadvantages:
  *  - Requires a CPU-side copy
  *  - Requires a GPU-side copy
@@ -194,12 +194,12 @@ export class MetaballWriteBuffer extends WebGPUMetaballRendererBase {
  * created or one of the other techniques, in conjunction with the appropriate usage flags, will
  * need to be used to update the buffer. As such this technique is good for buffers that will never
  * change or changes very infrequently.
- * 
+ *
  * Advantages:
  *  - Can set the buffer data immediately.
  *  - No specific usage flags required.
  *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
- * 
+ *
  * Disadvantages:
  *  - Only works for newly created buffers.
  *  - If buffer data changes frequently results in lots of buffer creation and destruction.
@@ -258,18 +258,18 @@ export class MetaballNewBuffer extends WebGPUMetaballRendererBase {
 //
 
 /**
- * This path is similar to the previous one, but uses a single set of vertex/index buffers and 
+ * This path is similar to the previous one, but uses a single set of vertex/index buffers and
  * creates a new set of staging buffers with mappedAtCreation set to true to copy from each time the
  * data needs to be updated. This allows the staging buffer's data to immediately be populated,
  * though the data still needs to be copied from the staging buffer into the vertex/index buffers
  * once the staging buffer is unmapped. This method only uses each staging buffer once, and if the
  * data is changed a new staging buffer is created. As such this technique is best for buffers that
  * changes infrequently.
- * 
+ *
  * Advantages:
  *  - Can set the buffer data immediately.
  *  - Data can be written directly into the mapped buffer, avoiding a CPU-side copy in some cases.
- * 
+ *
  * Disadvantages:
  *  - If buffer data changes frequently results in lots of staging buffer creation and destruction.
  *  - User agent must zero out the staging buffer when it's mapped.
@@ -330,7 +330,7 @@ export class MetaballNewStagingBuffer extends WebGPUMetaballRendererBase {
  * stalls if the data needs to be updated before the staging buffer has finished mapping again.
  * As such this technique is best for buffers that change with moderate frequency, such as every
  * few frames.
- * 
+ *
  * Advantages:
  *  - Well bounded memory usage.
  *  - No ongoing creation/destruction overhead.
@@ -408,7 +408,7 @@ export class MetaballSingleStagingBuffer extends WebGPUMetaballRendererBase {
  * complete it's placed in the queue of buffers which are ready for use. If the buffer data is
  * updated frequently this typically results in a list of 2-3 staging buffers that are cycled
  * through. This technique is best for buffers that change very frequency, such as every frame.
- * 
+ *
  * Advantages:
  *  - Limits buffer creation.
  *  - Doesn't wait on previously used buffers to be mapped.
@@ -440,13 +440,13 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
         usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE,
         mappedAtCreation: true,
       }),
-  
+
       normal: this.device.createBuffer({
         size: this.vertexBufferSize,
         usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE,
         mappedAtCreation: true,
       }),
-  
+
       index: this.device.createBuffer({
         size: this.indexBufferSize,
         usage: GPUBufferUsage.COPY_SRC | GPUBufferUsage.MAP_WRITE,
@@ -490,7 +490,7 @@ export class MetaballStagingBufferRing extends WebGPUMetaballRendererBase {
  * no copies, and as a result can be the most efficent route. Not every data set is well suited for
  * generation within a compute shader, however, and as such this method is only practical for data
  * which is algorithmically generated (for example: particle effects).
- * 
+ *
  * Advantages:
  *  - Does not require staging buffers.
  *  - No CPU or GPU-side copies.
@@ -752,7 +752,7 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
             shaderLocation: ATTRIB_MAP.POSITION,
             format: 'float32x3',
             offset: 0,
-            
+
           }],
         }, {
           arrayStride: 12,

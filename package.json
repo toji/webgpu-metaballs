@@ -11,6 +11,7 @@
         "dat.gui": "^0.7.7",
         "gl-matrix": "github:toji/gl-matrix",
         "stats.js": "^0.17.0",
-        "web-texture-tool": "github:toji/web-texture-tool"
+        "web-texture-tool": "github:toji/web-texture-tool",
+        "wgsl-preprocessor": "^1.0.0"
     }
 }

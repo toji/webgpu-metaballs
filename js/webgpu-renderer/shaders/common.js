@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { wgsl } from '../wgsl-debug-helper.js';
+import { wgsl } from 'wgsl-preprocessor';
 
 export const ATTRIB_MAP = {
   POSITION: 1,
