@@ -27,13 +27,13 @@ import {
 export const WORKGROUP_SIZE = [4, 4, 4];
 
 const IsosurfaceVolume = `
-  [[block]] struct IsosurfaceVolume {
+  struct IsosurfaceVolume {
     min: vec3<f32>;
     max: vec3<f32>;
     step: vec3<f32>;
     size: vec3<u32>;
     threshold: f32;
-    values: [[stride(4)]] array<f32>;
+    values: array<f32>;
   };
 `;
 
@@ -45,14 +45,14 @@ export const MetaballFieldComputeSource = `
     subtract: f32;
   };
 
-  [[block]] struct MetaballList {
+  struct MetaballList {
     ballCount: u32;
     balls: array<Metaball>;
   };
-  [[group(0), binding(0)]] var<storage> metaballs : MetaballList;
+  @group(0) @binding(0) var<storage> metaballs : MetaballList;
 
   ${IsosurfaceVolume}
-  [[group(0), binding(1)]] var<storage, read_write> volume : IsosurfaceVolume;
+  @group(0) @binding(1) var<storage, read_write> volume : IsosurfaceVolume;
 
   fn positionAt(index : vec3<u32>) -> vec3<f32> {
     return volume.min + (volume.step * vec3<f32>(index.xyz));
@@ -71,44 +71,44 @@ export const MetaballFieldComputeSource = `
     return result;
   }
 
-  [[stage(compute), workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})]]
-  fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+  @stage(compute) @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
+  fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
     let position = positionAt(global_id);
     let valueIndex = global_id.x +
                     (global_id.y * volume.size.x) +
                     (global_id.z * volume.size.x * volume.size.y);
-    
+
     volume.values[valueIndex] = surfaceFunc(position);
   }
 `;
 
 export const MarchingCubesComputeSource = `
-  [[block]] struct Tables {
-    edges: [[stride(4)]] array<u32, ${MarchingCubesEdgeTable.length}>;
-    tris: [[stride(4)]] array<i32, ${MarchingCubesTriTable.length}>;
+  struct Tables {
+    edges: array<u32, ${MarchingCubesEdgeTable.length}>;
+    tris: array<i32, ${MarchingCubesTriTable.length}>;
   };
-  [[group(0), binding(0)]] var<storage> tables : Tables;
+  @group(0) @binding(0) var<storage> tables : Tables;
 
   ${IsosurfaceVolume}
-  [[group(0), binding(1)]] var<storage, write> volume : IsosurfaceVolume;
+  @group(0) @binding(1) var<storage, write> volume : IsosurfaceVolume;
 
   // Output buffers
-  [[block]] struct PositionBuffer {
+  struct PositionBuffer {
     values : array<f32>;
   };
-  [[group(0), binding(2)]] var<storage, write> positionsOut : PositionBuffer;
+  @group(0) @binding(2) var<storage, write> positionsOut : PositionBuffer;
 
-  [[block]] struct NormalBuffer {
+  struct NormalBuffer {
     values : array<f32>;
   };
-  [[group(0), binding(3)]] var<storage, write> normalsOut : NormalBuffer;
+  @group(0) @binding(3) var<storage, write> normalsOut : NormalBuffer;
 
-  [[block]] struct IndexBuffer {
+  struct IndexBuffer {
     tris : array<u32>;
   };
-  [[group(0), binding(4)]] var<storage, write> indicesOut : IndexBuffer;
+  @group(0) @binding(4) var<storage, write> indicesOut : IndexBuffer;
 
-  [[block]] struct DrawIndirectArgs {
+  struct DrawIndirectArgs {
     vc : u32;
     vertexCount : atomic<u32>; // Actually instance count, treated as vertex count for point cloud rendering.
     firstVertex : u32;
@@ -120,7 +120,7 @@ export const MarchingCubesComputeSource = `
     indexedBaseVertex : u32;
     indexedFirstInstance : u32;
   };
-  [[group(0), binding(5)]] var<storage, read_write> drawOut : DrawIndirectArgs;
+  @group(0) @binding(5) var<storage, read_write> drawOut : DrawIndirectArgs;
 
   // Data fetchers
   fn valueAt(index : vec3<u32>) -> f32 {
@@ -144,7 +144,7 @@ export const MarchingCubesComputeSource = `
       valueAt(index - vec3<u32>(0u, 0u, 1u)) - valueAt(index + vec3<u32>(0u, 0u, 1u))
     );
   }
-  
+
   // Vertex interpolation
   var<private> positions : array<vec3<f32>, 12>;
   var<private> normals : array<vec3<f32>, 12>;
@@ -188,8 +188,8 @@ export const MarchingCubesComputeSource = `
   }
 
   // Main marching cubes algorithm
-  [[stage(compute), workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})]]
-  fn computeMain([[builtin(global_invocation_id)]] global_id : vec3<u32>) {
+  @stage(compute) @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
+  fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
     let i1 = global_id + vec3<u32>(1u, 0u, 0u);
@@ -282,18 +282,18 @@ export const MetaballVertexSource = `
   ${ViewUniforms}
 
   struct VertexInput {
-    [[location(${ATTRIB_MAP.POSITION})]] position : vec3<f32>;
-    [[location(${ATTRIB_MAP.NORMAL})]] normal : vec3<f32>;
+    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>;
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>;
   };
 
   struct VertexOutput {
-    [[location(0)]] worldPosition : vec3<f32>;
-    [[location(1)]] normal : vec3<f32>;
-    [[location(2)]] flow : vec3<f32>;
-    [[builtin(position)]] position : vec4<f32>;
+    @location(0) worldPosition : vec3<f32>;
+    @location(1) normal : vec3<f32>;
+    @location(2) flow : vec3<f32>;
+    @builtin(position) position : vec4<f32>;
   };
 
-  [[stage(vertex)]]
+  @stage(vertex)
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.worldPosition = input.position;
@@ -308,17 +308,17 @@ export const MetaballVertexSource = `
 export const MetaballFragmentSource = `
   ${ColorConversions}
 
-  [[group(1), binding(0)]] var baseSampler : sampler;
-  [[group(1), binding(1)]] var baseTexture : texture_2d<f32>;
+  @group(1) @binding(0) var baseSampler : sampler;
+  @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
   struct VertexOutput {
-    [[location(0)]] worldPosition : vec3<f32>;
-    [[location(1)]] normal : vec3<f32>;
-    [[location(2)]] flow : vec3<f32>;
+    @location(0) worldPosition : vec3<f32>;
+    @location(1) normal : vec3<f32>;
+    @location(2) flow : vec3<f32>;
   };
 
-  [[stage(fragment)]]
-  fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
+  @stage(fragment)
+  fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(input.normal);
 
     var blending : vec3<f32> = abs(normal);
@@ -344,19 +344,19 @@ export const MetaballVertexPointSource = `
   );
 
   struct VertexInput {
-    [[location(${ATTRIB_MAP.POSITION})]] position : vec3<f32>;
-    [[location(${ATTRIB_MAP.NORMAL})]] normal : vec3<f32>;
-    [[builtin(vertex_index)]] vertexIndex : u32;
+    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>;
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>;
+    @builtin(vertex_index) vertexIndex : u32;
   };
 
   struct VertexOutput {
-    [[location(0)]] worldPosition : vec3<f32>;
-    [[location(1)]] normal : vec3<f32>;
-    [[location(2)]] flow : vec3<f32>;
-    [[builtin(position)]] position : vec4<f32>;
+    @location(0) worldPosition : vec3<f32>;
+    @location(1) normal : vec3<f32>;
+    @location(2) flow : vec3<f32>;
+    @builtin(position) position : vec4<f32>;
   };
 
-  [[stage(vertex)]]
+  @stage(vertex)
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.worldPosition = input.position;
@@ -386,17 +386,17 @@ export const MetaballVertexPointSource = `
 export const MetaballFragmentPointSource = `
   ${ColorConversions}
 
-  [[group(1), binding(0)]] var baseSampler : sampler;
-  [[group(1), binding(1)]] var baseTexture : texture_2d<f32>;
+  @group(1) @binding(0) var baseSampler : sampler;
+  @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
   struct VertexOutput {
-    [[location(0)]] worldPosition : vec3<f32>;
-    [[location(1)]] normal : vec3<f32>;
-    [[location(2)]] flow : vec3<f32>;
+    @location(0) worldPosition : vec3<f32>;
+    @location(1) normal : vec3<f32>;
+    @location(2) flow : vec3<f32>;
   };
 
-  [[stage(fragment)]]
-  fn fragmentMain(input : VertexOutput) -> [[location(0)]] vec4<f32> {
+  @stage(fragment)
+  fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(1.0, 1.0, 1.0, 1.0);
   }
 `;
