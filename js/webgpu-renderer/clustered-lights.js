@@ -136,8 +136,8 @@ export class ClusteredLightManager {
     passEncoder.setPipeline(this.clusterBoundsPipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
     passEncoder.setBindGroup(1, this.clusterStorageBindGroup);
-    passEncoder.dispatch(...DISPATCH_SIZE);
-    passEncoder.endPass();
+    passEncoder.dispatchWorkgroups(...DISPATCH_SIZE);
+    passEncoder.end();
 
     if (!externalCommandEncoder) {
       device.queue.submit([commandEncoder.finish()]);
@@ -163,8 +163,8 @@ export class ClusteredLightManager {
     passEncoder.setPipeline(this.clusterLightsPipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
     passEncoder.setBindGroup(1, this.clusterBoundsBindGroup);
-    passEncoder.dispatch(...DISPATCH_SIZE);
-    passEncoder.endPass();
+    passEncoder.dispatchWorkgroups(...DISPATCH_SIZE);
+    passEncoder.end();
 
     if (!externalCommandEncoder) {
       device.queue.submit([commandEncoder.finish()]);

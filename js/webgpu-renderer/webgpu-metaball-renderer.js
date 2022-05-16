@@ -598,6 +598,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     this.device.createComputePipelineAsync({
       label: 'Metaball Isosurface Compute Pipeline',
+      layout: 'auto',
       compute: { module: metaballModule, entryPoint: 'computeMain' }
     }).then((pipeline) => {
       this.metaballComputePipeline = pipeline;
@@ -625,6 +626,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     this.device.createComputePipelineAsync({
       label: 'Marching Cubes Compute Pipeline',
+      layout: 'auto',
       compute: { module: marchingCubesModule, entryPoint: 'computeMain' }
     }).then((pipeline) => {;
       this.marchingCubesComputePipeline = pipeline;
@@ -703,16 +705,16 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     if (this.metaballComputePipeline) {
       passEncoder.setPipeline(this.metaballComputePipeline);
       passEncoder.setBindGroup(0, this.metaballComputeBindGroup);
-      passEncoder.dispatch(...dispatchSize);
+      passEncoder.dispatchWorkgroups(...dispatchSize);
     }
 
     if (this.marchingCubesComputePipeline) {
       passEncoder.setPipeline(this.marchingCubesComputePipeline);
       passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
-      passEncoder.dispatch(...dispatchSize);
+      passEncoder.dispatchWorkgroups(...dispatchSize);
     }
 
-    passEncoder.endPass();
+    passEncoder.end();
     this.device.queue.submit([commandEncoder.finish()]);
 
     this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;

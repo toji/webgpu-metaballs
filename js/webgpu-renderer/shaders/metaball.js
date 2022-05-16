@@ -28,27 +28,27 @@ export const WORKGROUP_SIZE = [4, 4, 4];
 
 const IsosurfaceVolume = `
   struct IsosurfaceVolume {
-    min: vec3<f32>;
-    max: vec3<f32>;
-    step: vec3<f32>;
-    size: vec3<u32>;
-    threshold: f32;
-    values: array<f32>;
-  };
+    min: vec3<f32>,
+    max: vec3<f32>,
+    step: vec3<f32>,
+    size: vec3<u32>,
+    threshold: f32,
+    values: array<f32>,
+  }
 `;
 
 export const MetaballFieldComputeSource = `
   struct Metaball {
-    position: vec3<f32>;
-    radius: f32;
-    strength: f32;
-    subtract: f32;
-  };
+    position: vec3<f32>,
+    radius: f32,
+    strength: f32,
+    subtract: f32,
+  }
 
   struct MetaballList {
-    ballCount: u32;
-    balls: array<Metaball>;
-  };
+    ballCount: u32,
+    balls: array<Metaball>,
+  }
   @group(0) @binding(0) var<storage> metaballs : MetaballList;
 
   ${IsosurfaceVolume}
@@ -84,9 +84,9 @@ export const MetaballFieldComputeSource = `
 
 export const MarchingCubesComputeSource = `
   struct Tables {
-    edges: array<u32, ${MarchingCubesEdgeTable.length}>;
-    tris: array<i32, ${MarchingCubesTriTable.length}>;
-  };
+    edges: array<u32, ${MarchingCubesEdgeTable.length}>,
+    tris: array<i32, ${MarchingCubesTriTable.length}>,
+  }
   @group(0) @binding(0) var<storage> tables : Tables;
 
   ${IsosurfaceVolume}
@@ -94,32 +94,32 @@ export const MarchingCubesComputeSource = `
 
   // Output buffers
   struct PositionBuffer {
-    values : array<f32>;
-  };
+    values : array<f32>,
+  }
   @group(0) @binding(2) var<storage, write> positionsOut : PositionBuffer;
 
   struct NormalBuffer {
-    values : array<f32>;
-  };
+    values : array<f32>,
+  }
   @group(0) @binding(3) var<storage, write> normalsOut : NormalBuffer;
 
   struct IndexBuffer {
-    tris : array<u32>;
-  };
+    tris : array<u32>,
+  }
   @group(0) @binding(4) var<storage, write> indicesOut : IndexBuffer;
 
   struct DrawIndirectArgs {
-    vc : u32;
-    vertexCount : atomic<u32>; // Actually instance count, treated as vertex count for point cloud rendering.
-    firstVertex : u32;
-    firstInstance : u32;
+    vc : u32,
+    vertexCount : atomic<u32>, // Actually instance count, treated as vertex count for point cloud rendering.
+    firstVertex : u32,
+    firstInstance : u32,
 
-    indexCount : atomic<u32>;
-    indexedInstanceCount : u32;
-    indexedFirstIndex : u32;
-    indexedBaseVertex : u32;
-    indexedFirstInstance : u32;
-  };
+    indexCount : atomic<u32>,
+    indexedInstanceCount : u32,
+    indexedFirstIndex : u32,
+    indexedBaseVertex : u32,
+    indexedFirstInstance : u32,
+  }
   @group(0) @binding(5) var<storage, read_write> drawOut : DrawIndirectArgs;
 
   // Data fetchers
@@ -282,16 +282,16 @@ export const MetaballVertexSource = `
   ${ViewUniforms}
 
   struct VertexInput {
-    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>;
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>;
-  };
+    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>,
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>,
+  }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>;
-    @location(1) normal : vec3<f32>;
-    @location(2) flow : vec3<f32>;
-    @builtin(position) position : vec4<f32>;
-  };
+    @location(0) worldPosition : vec3<f32>,
+    @location(1) normal : vec3<f32>,
+    @location(2) flow : vec3<f32>,
+    @builtin(position) position : vec4<f32>,
+  }
 
   @stage(vertex)
   fn vertexMain(input : VertexInput) -> VertexOutput {
@@ -312,10 +312,10 @@ export const MetaballFragmentSource = `
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>;
-    @location(1) normal : vec3<f32>;
-    @location(2) flow : vec3<f32>;
-  };
+    @location(0) worldPosition : vec3<f32>,
+    @location(1) normal : vec3<f32>,
+    @location(2) flow : vec3<f32>,
+  }
 
   @stage(fragment)
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
@@ -344,17 +344,17 @@ export const MetaballVertexPointSource = `
   );
 
   struct VertexInput {
-    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>;
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>;
-    @builtin(vertex_index) vertexIndex : u32;
-  };
+    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>,
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>,
+    @builtin(vertex_index) vertexIndex : u32,
+  }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>;
-    @location(1) normal : vec3<f32>;
-    @location(2) flow : vec3<f32>;
-    @builtin(position) position : vec4<f32>;
-  };
+    @location(0) worldPosition : vec3<f32>,
+    @location(1) normal : vec3<f32>,
+    @location(2) flow : vec3<f32>,
+    @builtin(position) position : vec4<f32>,
+  }
 
   @stage(vertex)
   fn vertexMain(input : VertexInput) -> VertexOutput {
@@ -390,10 +390,10 @@ export const MetaballFragmentPointSource = `
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>;
-    @location(1) normal : vec3<f32>;
-    @location(2) flow : vec3<f32>;
-  };
+    @location(0) worldPosition : vec3<f32>,
+    @location(1) normal : vec3<f32>,
+    @location(2) flow : vec3<f32>,
+  }
 
   @stage(fragment)
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {

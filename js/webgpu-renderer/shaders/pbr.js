@@ -24,18 +24,18 @@ import { ClusterLightsStructs, TileFunctions } from '../shaders/clustered-comput
 
 function PBR_VARYINGS(defines) { return wgsl`
 struct VertexOutput {
-  @builtin(position) position : vec4<f32>;
-  @location(0) worldPos : vec3<f32>;
-  @location(1) view : vec3<f32>; // Vector from vertex to camera.
-  @location(2) texCoord : vec2<f32>;
-  @location(3) color : vec4<f32>;
-  @location(4) normal : vec3<f32>;
+  @builtin(position) position : vec4<f32>,
+  @location(0) worldPos : vec3<f32>,
+  @location(1) view : vec3<f32>, // Vector from vertex to camera.
+  @location(2) texCoord : vec2<f32>,
+  @location(3) color : vec4<f32>,
+  @location(4) normal : vec3<f32>,
 
 #if ${defines.USE_NORMAL_MAP}
-  @location(5) tangent : vec3<f32>;
-  @location(6) bitangent : vec3<f32>;
+  @location(5) tangent : vec3<f32>,
+  @location(6) bitangent : vec3<f32>,
 #endif
-};
+}
 `;
 }
 
@@ -45,16 +45,16 @@ export function PBRVertexSource(defines) { return wgsl`
   ${ModelUniforms}
 
   struct VertexInputs {
-    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>;
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>;
-    @location(${ATTRIB_MAP.TEXCOORD_0}) texCoord : vec2<f32>;
+    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>,
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>,
+    @location(${ATTRIB_MAP.TEXCOORD_0}) texCoord : vec2<f32>,
 #if ${defines.USE_NORMAL_MAP}
-    @location(${ATTRIB_MAP.TANGENT}) tangent : vec4<f32>;
+    @location(${ATTRIB_MAP.TANGENT}) tangent : vec4<f32>,
 #endif
 #if ${defines.USE_VERTEX_COLOR}
-    @location(${ATTRIB_MAP.COLOR_0}) color : vec4<f32>;
+    @location(${ATTRIB_MAP.COLOR_0}) color : vec4<f32>,
 #endif
-  };
+  }
 
   ${PBR_VARYINGS(defines)}
 
@@ -87,15 +87,15 @@ function PBRSurfaceInfo(defines) { return wgsl`
   ${PBR_VARYINGS(defines)}
 
   struct SurfaceInfo {
-    baseColor : vec4<f32>;
-    albedo : vec3<f32>;
-    metallic : f32;
-    roughness : f32;
-    normal : vec3<f32>;
-    f0 : vec3<f32>;
-    ao : f32;
-    emissive : vec3<f32>;
-    v : vec3<f32>;
+    baseColor : vec4<f32>,
+    albedo : vec3<f32>,
+    metallic : f32,
+    roughness : f32,
+    normal : vec3<f32>,
+    f0 : vec3<f32>,
+    ao : f32,
+    emissive : vec3<f32>,
+    v : vec3<f32>,
   };
 
   fn GetSurfaceInfo(input : VertexOutput) -> SurfaceInfo {
@@ -105,9 +105,6 @@ function PBRSurfaceInfo(defines) { return wgsl`
     surface.baseColor = material.baseColorFactor * input.color;
 #if ${defines.USE_BASE_COLOR_MAP}
     let baseColorMap = textureSample(baseColorTexture, defaultSampler, input.texCoord);
-    if (baseColorMap.a < 0.05) {
-      discard;
-    }
     surface.baseColor = surface.baseColor * baseColorMap;
 #endif
 
@@ -158,12 +155,12 @@ let LightType_Spot = 1u;
 let LightType_Directional = 2u;
 
 struct PuctualLight {
-  lightType : u32;
-  pointToLight : vec3<f32>;
-  range : f32;
-  color : vec3<f32>;
-  intensity : f32;
-};
+  lightType : u32,
+  pointToLight : vec3<f32>,
+  range : f32,
+  color : vec3<f32>,
+  intensity : f32,
+}
 
 fn FresnelSchlick(cosTheta : f32, F0 : vec3<f32>) -> vec3<f32> {
   return F0 + (vec3<f32>(1.0, 1.0, 1.0) - F0) * pow(1.0 - cosTheta, 5.0);
@@ -246,6 +243,9 @@ export function PBRClusteredFragmentSource(defines) { return `
   @stage(fragment)
   fn main(input : VertexOutput) -> @location(0) vec4<f32> {
     let surface = GetSurfaceInfo(input);
+    if (surface.baseColor.a < 0.05) {
+      discard;
+    }
 
     // reflectance equation
     var Lo = vec3<f32>(0.0, 0.0, 0.0);
