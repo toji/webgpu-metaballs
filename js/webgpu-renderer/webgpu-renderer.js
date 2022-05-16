@@ -58,6 +58,7 @@ export class WebGPURenderer extends Renderer {
     super();
 
     this.sampleCount = SAMPLE_COUNT;
+    this.contextFormat = 'bgra8unorm';
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('webgpu');
@@ -87,7 +88,13 @@ export class WebGPURenderer extends Renderer {
 
     this.device = await this.adapter.requestDevice({requiredFeatures, requiredLimits});
 
-    this.contextFormat = this.context.getPreferredFormat(this.adapter);
+
+    if (navigator.gpu.getPreferredCanvasFormat) {
+      this.contextFormat = navigator.gpu.getPreferredCanvasFormat();
+    } else if (this.context.getPreferredFormat) {
+      this.contextFormat = this.context.getPreferredFormat(this.adapter);
+    }
+
     this.renderBundleDescriptor = {
       colorFormats: [ this.contextFormat ],
       depthStencilFormat: DEPTH_FORMAT,
@@ -111,8 +118,6 @@ export class WebGPURenderer extends Renderer {
       depthLoadOp: 'clear',
       depthClearValue: 1.0,
       depthStoreOp: 'discard',
-      stencilLoadOp: 'clear',
-      stencilStoreOp: 'discard',
     };
 
     this.renderPassDescriptor = {
@@ -205,6 +210,8 @@ export class WebGPURenderer extends Renderer {
       })
     };
 
+    this.bindGroupLayouts.frame.label = "frame-bgl-SUPER ULTRA COOL EDITION";
+
     this.pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [
         this.bindGroupLayouts.frame, // set 0
@@ -277,7 +284,8 @@ export class WebGPURenderer extends Renderer {
     this.context.configure({
       device: this.device,
       format: this.contextFormat,
-      size: {width, height}
+      size: {width, height},
+      compositingAlphaMode: 'opaque',
     });
 
     const msaaColorTexture = this.device.createTexture({
@@ -394,7 +402,7 @@ export class WebGPURenderer extends Renderer {
       this.lightSprites.draw(passEncoder);
     }
 
-    passEncoder.endPass();
+    passEncoder.end();
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
 
