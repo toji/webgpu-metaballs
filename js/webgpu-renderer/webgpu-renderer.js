@@ -88,12 +88,17 @@ export class WebGPURenderer extends Renderer {
 
     this.device = await this.adapter.requestDevice({requiredFeatures, requiredLimits});
 
-
     if (navigator.gpu.getPreferredCanvasFormat) {
       this.contextFormat = navigator.gpu.getPreferredCanvasFormat();
     } else if (this.context.getPreferredFormat) {
       this.contextFormat = this.context.getPreferredFormat(this.adapter);
     }
+
+    this.context.configure({
+      device: this.device,
+      format: this.contextFormat,
+      alphaMode: 'opaque',
+    });
 
     this.renderBundleDescriptor = {
       colorFormats: [ this.contextFormat ],
@@ -281,12 +286,7 @@ export class WebGPURenderer extends Renderer {
   onResize(width, height) {
     if (!this.device) return;
 
-    this.context.configure({
-      device: this.device,
-      format: this.contextFormat,
-      size: {width, height},
-      compositingAlphaMode: 'opaque',
-    });
+    // Canvas/context resize already handled in base class.
 
     const msaaColorTexture = this.device.createTexture({
       size: { width, height },
