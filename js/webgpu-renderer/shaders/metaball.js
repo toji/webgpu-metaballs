@@ -71,7 +71,7 @@ export const MetaballFieldComputeSource = `
     return result;
   }
 
-  @stage(compute) @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
+  @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
     let position = positionAt(global_id);
     let valueIndex = global_id.x +
@@ -188,7 +188,7 @@ export const MarchingCubesComputeSource = `
   }
 
   // Main marching cubes algorithm
-  @stage(compute) @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
+  @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
@@ -293,7 +293,7 @@ export const MetaballVertexSource = `
     @builtin(position) position : vec4<f32>,
   }
 
-  @stage(vertex)
+  @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.worldPosition = input.position;
@@ -317,7 +317,7 @@ export const MetaballFragmentSource = `
     @location(2) flow : vec3<f32>,
   }
 
-  @stage(fragment)
+  @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(input.normal);
 
@@ -356,7 +356,7 @@ export const MetaballVertexPointSource = `
     @builtin(position) position : vec4<f32>,
   }
 
-  @stage(vertex)
+  @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
     output.worldPosition = input.position;
@@ -395,7 +395,7 @@ export const MetaballFragmentPointSource = `
     @location(2) flow : vec3<f32>,
   }
 
-  @stage(fragment)
+  @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
     return vec4<f32>(1.0, 1.0, 1.0, 1.0);
   }
