@@ -74,7 +74,7 @@ export class WebGPURenderer extends Renderer {
 
     // Enable compressed textures if available
     const requiredFeatures = [];
-    if (this.adapter.features.has('texture-compression-bc') != -1) {
+    if (this.adapter.features.has('texture-compression-bc')) {
       requiredFeatures.push('texture-compression-bc');
     }
 
