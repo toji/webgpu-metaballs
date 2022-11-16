@@ -26,7 +26,7 @@ import {
 
 export const WORKGROUP_SIZE = [4, 4, 4];
 
-const IsosurfaceVolume = `
+const IsosurfaceVolume = /*wgsl*/`
   struct IsosurfaceVolume {
     min: vec3<f32>,
     max: vec3<f32>,
@@ -37,7 +37,7 @@ const IsosurfaceVolume = `
   }
 `;
 
-export const MetaballFieldComputeSource = `
+export const MetaballFieldComputeSource = /*wgsl*/`
   struct Metaball {
     position: vec3<f32>,
     radius: f32,
@@ -82,7 +82,7 @@ export const MetaballFieldComputeSource = `
   }
 `;
 
-export const MarchingCubesComputeSource = `
+export const MarchingCubesComputeSource = /*wgsl*/`
   struct Tables {
     edges: array<u32, ${MarchingCubesEdgeTable.length}>,
     tris: array<i32, ${MarchingCubesTriTable.length}>,
@@ -277,7 +277,7 @@ export const MarchingCubesComputeSource = `
   }
 `;
 
-export const MetaballVertexSource = `
+export const MetaballVertexSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
 
@@ -305,7 +305,7 @@ export const MetaballVertexSource = `
   }
 `;
 
-export const MetaballFragmentSource = `
+export const MetaballFragmentSource = /*wgsl*/`
   ${ColorConversions}
 
   @group(1) @binding(0) var baseSampler : sampler;
@@ -335,7 +335,7 @@ export const MetaballFragmentSource = `
 `;
 
 // For visualizing the metaballs as a point cloud
-export const MetaballVertexPointSource = `
+export const MetaballVertexPointSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
 
@@ -383,7 +383,7 @@ export const MetaballVertexPointSource = `
   }
 `;
 
-export const MetaballFragmentPointSource = `
+export const MetaballFragmentPointSource = /*wgsl*/`
   ${ColorConversions}
 
   @group(1) @binding(0) var baseSampler : sampler;

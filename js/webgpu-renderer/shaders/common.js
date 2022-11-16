@@ -35,7 +35,7 @@ export const BIND_GROUP = {
 };
 
 export const ProjectionUniformsSize = 144;
-export const ProjectionUniforms = `
+export const ProjectionUniforms = /*wgsl*/`
   struct ProjectionUniforms {
     matrix : mat4x4<f32>,
     inverseMatrix : mat4x4<f32>,
@@ -47,7 +47,7 @@ export const ProjectionUniforms = `
 `;
 
 export const ViewUniformsSize = 80;
-export const ViewUniforms = `
+export const ViewUniforms = /*wgsl*/`
   struct ViewUniforms {
     matrix : mat4x4<f32>,
     position : vec3<f32>,
@@ -56,7 +56,7 @@ export const ViewUniforms = `
   @group(${BIND_GROUP.Frame}) @binding(1) var<uniform> view : ViewUniforms;
 `;
 
-export const LightUniforms = `
+export const LightUniforms = /*wgsl*/`
   struct Light {
     position : vec3<f32>,
     range : f32,
@@ -73,7 +73,7 @@ export const LightUniforms = `
 `;
 
 export const ModelUniformsSize = 64;
-export const ModelUniforms = `
+export const ModelUniforms = /*wgsl*/`
   struct ModelUniforms {
     matrix : mat4x4<f32>,
   }
@@ -81,7 +81,7 @@ export const ModelUniforms = `
 `;
 
 export const MaterialUniformsSize = 48;
-export const MaterialUniforms = `
+export const MaterialUniforms = /*wgsl*/`
   struct MaterialUniforms {
     baseColorFactor : vec4<f32>,
     metallicRoughnessFactor : vec2<f32>,
@@ -130,7 +130,7 @@ export const ColorConversions = wgsl`
 #endif
 `;
 
-export const SimpleVertexSource = `
+export const SimpleVertexSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
   ${ModelUniforms}

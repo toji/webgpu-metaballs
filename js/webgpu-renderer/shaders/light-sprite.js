@@ -20,7 +20,7 @@
 
 import { ProjectionUniforms, ViewUniforms, LightUniforms, ColorConversions } from './common.js';
 
-export const LightSpriteVertexSource = `
+export const LightSpriteVertexSource = /*wgsl*/`
   var<private> pos : array<vec2<f32>, 4> = array<vec2<f32>, 4>(
     vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0)
   );
@@ -69,7 +69,7 @@ export const LightSpriteVertexSource = `
   }
 `;
 
-export const LightSpriteFragmentSource = `
+export const LightSpriteFragmentSource = /*wgsl*/`
   ${ColorConversions}
 
   struct FragmentInput {

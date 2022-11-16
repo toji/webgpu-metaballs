@@ -37,7 +37,7 @@ export const DISPATCH_SIZE = [
 export const MAX_LIGHTS_PER_CLUSTER = 100;
 export const CLUSTER_LIGHTS_SIZE = (8 * TOTAL_TILES) + (4 * MAX_LIGHTS_PER_CLUSTER * TOTAL_TILES) + 4;
 
-export const TileFunctions = `
+export const TileFunctions = /*wgsl*/`
 const tileCount : vec3<u32> = vec3<u32>(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
 
 fn linearDepth(depthSample : f32) -> f32 {
@@ -63,7 +63,7 @@ fn getClusterIndex(fragCoord : vec4<f32>) -> u32 {
 }
 `;
 
-export const ClusterStructs = `
+export const ClusterStructs = /*wgsl*/`
   struct ClusterBounds {
     minAABB : vec3<f32>,
     maxAABB : vec3<f32>,
@@ -73,7 +73,7 @@ export const ClusterStructs = `
   }
 `;
 
-export const ClusterLightsStructs = `
+export const ClusterLightsStructs = /*wgsl*/`
   struct ClusterLights {
     offset : u32,
     count : u32,
@@ -86,7 +86,7 @@ export const ClusterLightsStructs = `
   @group(${BIND_GROUP.Frame}) @binding(3) var<storage, read_write> clusterLights : ClusterLightGroup;
 `;
 
-export const ClusterBoundsSource = `
+export const ClusterBoundsSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ClusterStructs}
   @group(1) @binding(0) var<storage, read_write> clusters : Clusters;
@@ -140,7 +140,7 @@ export const ClusterBoundsSource = `
   }
 `;
 
-export const ClusterLightsSource = `
+export const ClusterLightsSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
   ${LightUniforms}
