@@ -147,7 +147,7 @@ function PBRSurfaceInfo(defines) { return wgsl`
 
 // Much of the shader used here was pulled from https://learnopengl.com/PBR/Lighting
 // Thanks!
-const PBRFunctions = `
+const PBRFunctions = /*wgsl*/`
 const PI = ${Math.PI};
 
 const LightType_Point = 0u;
@@ -229,7 +229,7 @@ fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3<f32> {
   return (kD * surface.albedo / vec3<f32>(PI, PI, PI) + specular) * radiance * NdotL;
 }`;
 
-export function PBRClusteredFragmentSource(defines) { return `
+export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
   ${ColorConversions}
   ${ProjectionUniforms}
   ${ClusterLightsStructs}
