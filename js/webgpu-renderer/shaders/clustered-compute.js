@@ -23,7 +23,7 @@
 
 import { ProjectionUniforms, ViewUniforms, LightUniforms, BIND_GROUP } from './common.js';
 
-export const TILE_COUNT = [32, 18, 48];
+export const TILE_COUNT = [16, 10, 24];
 export const TOTAL_TILES = TILE_COUNT[0] * TILE_COUNT[1] * TILE_COUNT[2];
 
 const WORKGROUP_SIZE = [4, 2, 4];
