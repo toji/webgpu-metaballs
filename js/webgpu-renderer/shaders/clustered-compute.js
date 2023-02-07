@@ -23,7 +23,7 @@
 
 import { ProjectionUniforms, ViewUniforms, LightUniforms, BIND_GROUP } from './common.js';
 
-export const TILE_COUNT = [16, 10, 24];
+export const TILE_COUNT = [8, 8, 12];
 export const TOTAL_TILES = TILE_COUNT[0] * TILE_COUNT[1] * TILE_COUNT[2];
 
 const WORKGROUP_SIZE = [4, 2, 4];
@@ -34,7 +34,7 @@ export const DISPATCH_SIZE = [
 
 // Each cluster tracks up to MAX_LIGHTS_PER_CLUSTER light indices (ints) and one light count.
 // This limitation should be able to go away when we have atomic methods in WGSL.
-export const MAX_LIGHTS_PER_CLUSTER = 100;
+export const MAX_LIGHTS_PER_CLUSTER = 20;
 export const CLUSTER_LIGHTS_SIZE = (8 * TOTAL_TILES) + (4 * MAX_LIGHTS_PER_CLUSTER * TOTAL_TILES) + 4;
 
 export const TileFunctions = /*wgsl*/`
