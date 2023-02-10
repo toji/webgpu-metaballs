@@ -37,9 +37,9 @@ export const BIND_GROUP = {
 export const ProjectionUniformsSize = 144;
 export const ProjectionUniforms = /*wgsl*/`
   struct ProjectionUniforms {
-    matrix : mat4x4<f32>,
-    inverseMatrix : mat4x4<f32>,
-    outputSize : vec2<f32>,
+    matrix : mat4x4f,
+    inverseMatrix : mat4x4f,
+    outputSize : vec2f,
     zNear : f32,
     zFar : f32,
   }
@@ -49,8 +49,8 @@ export const ProjectionUniforms = /*wgsl*/`
 export const ViewUniformsSize = 80;
 export const ViewUniforms = /*wgsl*/`
   struct ViewUniforms {
-    matrix : mat4x4<f32>,
-    position : vec3<f32>,
+    matrix : mat4x4f,
+    position : vec3f,
     time : f32,
   }
   @group(${BIND_GROUP.Frame}) @binding(1) var<uniform> view : ViewUniforms;
@@ -58,14 +58,14 @@ export const ViewUniforms = /*wgsl*/`
 
 export const LightUniforms = /*wgsl*/`
   struct Light {
-    position : vec3<f32>,
+    position : vec3f,
     range : f32,
-    color : vec3<f32>,
+    color : vec3f,
     intensity : f32,
   }
 
   struct GlobalLightUniforms {
-    ambient : vec3<f32>,
+    ambient : vec3f,
     lightCount : u32,
     lights : array<Light>,
   }
@@ -75,7 +75,7 @@ export const LightUniforms = /*wgsl*/`
 export const ModelUniformsSize = 64;
 export const ModelUniforms = /*wgsl*/`
   struct ModelUniforms {
-    matrix : mat4x4<f32>,
+    matrix : mat4x4f,
   }
   @group(${BIND_GROUP.Model}) @binding(0) var<uniform> model : ModelUniforms;
 `;
@@ -83,9 +83,9 @@ export const ModelUniforms = /*wgsl*/`
 export const MaterialUniformsSize = 48;
 export const MaterialUniforms = /*wgsl*/`
   struct MaterialUniforms {
-    baseColorFactor : vec4<f32>,
-    metallicRoughnessFactor : vec2<f32>,
-    emissiveFactor : vec3<f32>,
+    baseColorFactor : vec4f,
+    metallicRoughnessFactor : vec2f,
+    emissiveFactor : vec3f,
     occlusionStrength : f32,
   }
   @group(${BIND_GROUP.Material}) @binding(0) var<uniform> material : MaterialUniforms;
@@ -104,28 +104,28 @@ export const ColorConversions = wgsl`
   // linear <-> sRGB approximations
   // see http://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
   let GAMMA = 2.2;
-  fn linearTosRGB(linear : vec3<f32>) -> vec3<f32> {
+  fn linearTosRGB(linear : vec3f) -> vec3f {
     let INV_GAMMA = 1.0 / GAMMA;
-    return pow(linear, vec3<f32>(INV_GAMMA, INV_GAMMA, INV_GAMMA));
+    return pow(linear, vec3(INV_GAMMA));
   }
 
-  fn sRGBToLinear(srgb : vec3<f32>) -> vec3<f32> {
-    return pow(srgb, vec3<f32>(GAMMA, GAMMA, GAMMA));
+  fn sRGBToLinear(srgb : vec3f) -> vec3f {
+    return pow(srgb, vec3(GAMMA));
   }
 #else
   // linear <-> sRGB conversions
-  fn linearTosRGB(linear : vec3<f32>) -> vec3<f32> {
-    if (all(linear <= vec3<f32>(0.0031308, 0.0031308, 0.0031308))) {
+  fn linearTosRGB(linear : vec3f) -> vec3f {
+    if (all(linear <= vec3(0.0031308))) {
       return linear * 12.92;
     }
-    return (pow(abs(linear), vec3<f32>(1.0/2.4, 1.0/2.4, 1.0/2.4)) * 1.055) - vec3<f32>(0.055, 0.055, 0.055);
+    return (pow(abs(linear), vec3(1.0/2.4)) * 1.055) - vec3(0.055);
   }
 
-  fn sRGBToLinear(srgb : vec3<f32>) -> vec3<f32> {
-    if (all(srgb <= vec3<f32>(0.04045, 0.04045, 0.04045))) {
-      return srgb / vec3<f32>(12.92, 12.92, 12.92);
+  fn sRGBToLinear(srgb : vec3f) -> vec3f {
+    if (all(srgb <= vec3(0.04045))) {
+      return srgb / vec3(12.92);
     }
-    return pow((srgb + vec3<f32>(0.055, 0.055, 0.055)) / vec3<f32>(1.055, 1.055, 1.055), vec3<f32>(2.4, 2.4, 2.4));
+    return pow((srgb + vec3(0.055)) / vec3(1.055), vec3(2.4));
   }
 #endif
 `;
@@ -136,7 +136,7 @@ export const SimpleVertexSource = /*wgsl*/`
   ${ModelUniforms}
 
   @vertex
-  fn main(@location(${ATTRIB_MAP.POSITION}) POSITION : vec3<f32>) -> @builtin(position) vec4<f32> {
-    return projection.matrix * view.matrix * model.matrix * vec4<f32>(POSITION, 1.0);
+  fn main(@location(${ATTRIB_MAP.POSITION}) POSITION : vec3f) -> @builtin(position) vec4f {
+    return projection.matrix * view.matrix * model.matrix * vec4(POSITION, 1.0);
   }
 `;

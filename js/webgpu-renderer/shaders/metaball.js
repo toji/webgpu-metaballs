@@ -28,10 +28,10 @@ export const WORKGROUP_SIZE = [4, 4, 4];
 
 const IsosurfaceVolume = /*wgsl*/`
   struct IsosurfaceVolume {
-    min: vec3<f32>,
-    max: vec3<f32>,
-    step: vec3<f32>,
-    size: vec3<u32>,
+    min: vec3f,
+    max: vec3f,
+    step: vec3f,
+    size: vec3u,
     threshold: f32,
     values: array<f32>,
   }
@@ -39,7 +39,7 @@ const IsosurfaceVolume = /*wgsl*/`
 
 export const MetaballFieldComputeSource = /*wgsl*/`
   struct Metaball {
-    position: vec3<f32>,
+    position: vec3f,
     radius: f32,
     strength: f32,
     subtract: f32,
@@ -54,11 +54,11 @@ export const MetaballFieldComputeSource = /*wgsl*/`
   ${IsosurfaceVolume}
   @group(0) @binding(1) var<storage, read_write> volume : IsosurfaceVolume;
 
-  fn positionAt(index : vec3<u32>) -> vec3<f32> {
-    return volume.min + (volume.step * vec3<f32>(index.xyz));
+  fn positionAt(index : vec3u) -> vec3f {
+    return volume.min + (volume.step * vec3f(index.xyz));
   }
 
-  fn surfaceFunc(position : vec3<f32>) -> f32 {
+  fn surfaceFunc(position : vec3f) -> f32 {
     var result = 0.0;
     for (var i = 0u; i < metaballs.ballCount; i = i + 1u) {
       let ball = metaballs.balls[i];
@@ -72,7 +72,7 @@ export const MetaballFieldComputeSource = /*wgsl*/`
   }
 
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
-  fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
+  fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
     let position = positionAt(global_id);
     let valueIndex = global_id.x +
                     (global_id.y * volume.size.x) +
@@ -123,7 +123,7 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   @group(0) @binding(5) var<storage, read_write> drawOut : DrawIndirectArgs;
 
   // Data fetchers
-  fn valueAt(index : vec3<u32>) -> f32 {
+  fn valueAt(index : vec3u) -> f32 {
     // Don't index outside of the volume bounds.
     if (any(index >= volume.size)) { return 0.0; }
 
@@ -133,55 +133,55 @@ export const MarchingCubesComputeSource = /*wgsl*/`
     return volume.values[valueIndex];
   }
 
-  fn positionAt(index : vec3<u32>) -> vec3<f32> {
-    return volume.min + (volume.step * vec3<f32>(index.xyz));
+  fn positionAt(index : vec3u) -> vec3f {
+    return volume.min + (volume.step * vec3f(index.xyz));
   }
 
-  fn normalAt(index : vec3<u32>) -> vec3<f32> {
-    return vec3<f32>(
-      valueAt(index - vec3<u32>(1u, 0u, 0u)) - valueAt(index + vec3<u32>(1u, 0u, 0u)),
-      valueAt(index - vec3<u32>(0u, 1u, 0u)) - valueAt(index + vec3<u32>(0u, 1u, 0u)),
-      valueAt(index - vec3<u32>(0u, 0u, 1u)) - valueAt(index + vec3<u32>(0u, 0u, 1u))
+  fn normalAt(index : vec3u) -> vec3f {
+    return vec3(
+      valueAt(index - vec3(1u, 0u, 0u)) - valueAt(index + vec3(1u, 0u, 0u)),
+      valueAt(index - vec3(0u, 1u, 0u)) - valueAt(index + vec3(0u, 1u, 0u)),
+      valueAt(index - vec3(0u, 0u, 1u)) - valueAt(index + vec3(0u, 0u, 1u))
     );
   }
 
   // Vertex interpolation
-  var<private> positions : array<vec3<f32>, 12>;
-  var<private> normals : array<vec3<f32>, 12>;
+  var<private> positions : array<vec3f, 12>;
+  var<private> normals : array<vec3f, 12>;
   var<private> indices : array<u32, 12>;
   var<private> cubeVerts : u32 = 0u;
 
-  fn interpX(index : u32, i : vec3<u32>, va : f32, vb : f32) {
+  fn interpX(index : u32, i : vec3u, va : f32, vb : f32) {
     let mu = (volume.threshold - va) / (vb - va);
-    positions[cubeVerts] = positionAt(i) + vec3<f32>(volume.step.x * mu, 0.0, 0.0);
+    positions[cubeVerts] = positionAt(i) + vec3(volume.step.x * mu, 0.0, 0.0);
 
     let na = normalAt(i);
-    let nb = normalAt(i + vec3<u32>(1u, 0u, 0u));
-    normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
+    let nb = normalAt(i + vec3(1u, 0u, 0u));
+    normals[cubeVerts] = mix(na, nb, vec3(mu));
 
     indices[index] = cubeVerts;
     cubeVerts = cubeVerts + 1u;
   }
 
-  fn interpY(index : u32, i : vec3<u32>, va : f32, vb : f32) {
+  fn interpY(index : u32, i : vec3u, va : f32, vb : f32) {
     let mu = (volume.threshold - va) / (vb - va);
-    positions[cubeVerts] = positionAt(i) + vec3<f32>(0.0, volume.step.y * mu, 0.0);
+    positions[cubeVerts] = positionAt(i) + vec3(0.0, volume.step.y * mu, 0.0);
 
     let na = normalAt(i);
-    let nb = normalAt(i + vec3<u32>(0u, 1u, 0u));
-    normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
+    let nb = normalAt(i + vec3(0u, 1u, 0u));
+    normals[cubeVerts] = mix(na, nb, vec3(mu));
 
     indices[index] = cubeVerts;
     cubeVerts = cubeVerts + 1u;
   }
 
-  fn interpZ(index : u32, i : vec3<u32>, va : f32, vb : f32) {
+  fn interpZ(index : u32, i : vec3u, va : f32, vb : f32) {
     let mu = (volume.threshold - va) / (vb - va);
-    positions[cubeVerts] = positionAt(i) + vec3<f32>(0.0, 0.0, volume.step.z * mu);
+    positions[cubeVerts] = positionAt(i) + vec3(0.0, 0.0, volume.step.z * mu);
 
     let na = normalAt(i);
-    let nb = normalAt(i + vec3<u32>(0u, 0u, 1u));
-    normals[cubeVerts] = mix(na, nb, vec3<f32>(mu, mu, mu));
+    let nb = normalAt(i + vec3(0u, 0u, 1u));
+    normals[cubeVerts] = mix(na, nb, vec3(mu));
 
     indices[index] = cubeVerts;
     cubeVerts = cubeVerts + 1u;
@@ -189,16 +189,16 @@ export const MarchingCubesComputeSource = /*wgsl*/`
 
   // Main marching cubes algorithm
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
-  fn computeMain(@builtin(global_invocation_id) global_id : vec3<u32>) {
+  fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
-    let i1 = global_id + vec3<u32>(1u, 0u, 0u);
-    let i2 = global_id + vec3<u32>(1u, 1u, 0u);
-    let i3 = global_id + vec3<u32>(0u, 1u, 0u);
-    let i4 = global_id + vec3<u32>(0u, 0u, 1u);
-    let i5 = global_id + vec3<u32>(1u, 0u, 1u);
-    let i6 = global_id + vec3<u32>(1u, 1u, 1u);
-    let i7 = global_id + vec3<u32>(0u, 1u, 1u);
+    let i1 = global_id + vec3(1u, 0u, 0u);
+    let i2 = global_id + vec3(1u, 1u, 0u);
+    let i3 = global_id + vec3(0u, 1u, 0u);
+    let i4 = global_id + vec3(0u, 0u, 1u);
+    let i5 = global_id + vec3(1u, 0u, 1u);
+    let i6 = global_id + vec3(1u, 1u, 1u);
+    let i7 = global_id + vec3(0u, 1u, 1u);
 
     let v0 = valueAt(i0);
     let v1 = valueAt(i1);
@@ -282,15 +282,15 @@ export const MetaballVertexSource = /*wgsl*/`
   ${ViewUniforms}
 
   struct VertexInput {
-    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>,
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>,
+    @location(${ATTRIB_MAP.POSITION}) position : vec3f,
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3f,
   }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) flow : vec3<f32>,
-    @builtin(position) position : vec4<f32>,
+    @location(0) worldPosition : vec3f,
+    @location(1) normal : vec3f,
+    @location(2) flow : vec3f,
+    @builtin(position) position : vec4f,
   }
 
   @vertex
@@ -298,9 +298,9 @@ export const MetaballVertexSource = /*wgsl*/`
     var output : VertexOutput;
     output.worldPosition = input.position;
     output.normal = input.normal;
-    output.flow = vec3<f32>(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+    output.flow = vec3(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
 
-    output.position = projection.matrix * view.matrix * vec4<f32>(input.position, 1.0);
+    output.position = projection.matrix * view.matrix * vec4(input.position, 1.0);
     return output;
   }
 `;
@@ -312,17 +312,17 @@ export const MetaballFragmentSource = /*wgsl*/`
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) flow : vec3<f32>,
+    @location(0) worldPosition : vec3f,
+    @location(1) normal : vec3f,
+    @location(2) flow : vec3f,
   }
 
   @fragment
-  fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
+  fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
     let normal = normalize(input.normal);
 
-    var blending : vec3<f32> = abs(normal);
-    blending = normalize(max(blending, vec3<f32>(0.00001, 0.00001, 0.00001))); // Force weights to sum to 1.0
+    var blending = abs(normal);
+    blending = normalize(max(blending, vec3(0.00001))); // Force weights to sum to 1.0
 
     let xTex = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
     let yTex = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
@@ -330,7 +330,7 @@ export const MetaballFragmentSource = /*wgsl*/`
     // blend the results of the 3 planar projections.
     let tex = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
-    return vec4<f32>(linearTosRGB(tex.xyz), 1.0);
+    return vec4(linearTosRGB(tex.xyz), 1.0);
   }
 `;
 
@@ -339,21 +339,21 @@ export const MetaballVertexPointSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
 
-  var<private> pos : array<vec2<f32>, 4> = array<vec2<f32>, 4>(
-    vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0)
+  var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
+    vec2(-1.0, 1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, -1.0)
   );
 
   struct VertexInput {
-    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>,
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>,
+    @location(${ATTRIB_MAP.POSITION}) position : vec3f,
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3f,
     @builtin(vertex_index) vertexIndex : u32,
   }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) flow : vec3<f32>,
-    @builtin(position) position : vec4<f32>,
+    @location(0) worldPosition : vec3f,
+    @location(1) normal : vec3f,
+    @location(2) flow : vec3f,
+    @builtin(position) position : vec4f,
   }
 
   @vertex
@@ -361,10 +361,10 @@ export const MetaballVertexPointSource = /*wgsl*/`
     var output : VertexOutput;
     output.worldPosition = input.position;
     output.normal = input.normal;
-    output.flow = vec3<f32>(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+    output.flow = vec3(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
 
-    var bbModelViewMatrix : mat4x4<f32>;
-    bbModelViewMatrix[3] = vec4<f32>(input.position, 1.0);
+    var bbModelViewMatrix : mat4x4f;
+    bbModelViewMatrix[3] = vec4(input.position, 1.0);
     bbModelViewMatrix = view.matrix * bbModelViewMatrix;
     bbModelViewMatrix[0][0] = 1.0;
     bbModelViewMatrix[0][1] = 0.0;
@@ -378,7 +378,7 @@ export const MetaballVertexPointSource = /*wgsl*/`
     bbModelViewMatrix[2][1] = 0.0;
     bbModelViewMatrix[2][2] = 1.0;
 
-    output.position = projection.matrix * bbModelViewMatrix * vec4<f32>(pos[input.vertexIndex] * 0.005, 0.0, 1.0);
+    output.position = projection.matrix * bbModelViewMatrix * vec4f(pos[input.vertexIndex] * 0.005, 0.0, 1.0);
     return output;
   }
 `;
@@ -390,13 +390,13 @@ export const MetaballFragmentPointSource = /*wgsl*/`
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) flow : vec3<f32>,
+    @location(0) worldPosition : vec3f,
+    @location(1) normal : vec3f,
+    @location(2) flow : vec3f,
   }
 
   @fragment
-  fn fragmentMain(input : VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+  fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
+    return vec4(1.0);
   }
 `;

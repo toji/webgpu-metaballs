@@ -21,8 +21,8 @@
 import { ProjectionUniforms, ViewUniforms, LightUniforms, ColorConversions } from './common.js';
 
 export const LightSpriteVertexSource = /*wgsl*/`
-  var<private> pos : array<vec2<f32>, 4> = array<vec2<f32>, 4>(
-    vec2<f32>(-1.0, 1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0)
+  var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
+    vec2(-1.0, 1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, -1.0)
   );
 
   ${ProjectionUniforms}
@@ -35,9 +35,9 @@ export const LightSpriteVertexSource = /*wgsl*/`
   }
 
   struct VertexOutput {
-    @builtin(position) position : vec4<f32>,
-    @location(0) localPos : vec2<f32>,
-    @location(1) color: vec3<f32>,
+    @builtin(position) position : vec4f,
+    @location(0) localPos : vec2f,
+    @location(1) color: vec3f,
   }
 
   @vertex
@@ -46,11 +46,11 @@ export const LightSpriteVertexSource = /*wgsl*/`
 
     output.localPos = pos[input.vertexIndex];
     output.color = globalLights.lights[input.instanceIndex].color * globalLights.lights[input.instanceIndex].intensity;
-    let worldPos = vec3<f32>(output.localPos, 0.0) * globalLights.lights[input.instanceIndex].range * 0.025;
+    let worldPos = vec3(output.localPos, 0.0) * globalLights.lights[input.instanceIndex].range * 0.025;
 
     // Generate a billboarded model view matrix
-    var bbModelViewMatrix : mat4x4<f32>;
-    bbModelViewMatrix[3] = vec4<f32>(globalLights.lights[input.instanceIndex].position, 1.0);
+    var bbModelViewMatrix : mat4x4f;
+    bbModelViewMatrix[3] = vec4(globalLights.lights[input.instanceIndex].position, 1.0);
     bbModelViewMatrix = view.matrix * bbModelViewMatrix;
     bbModelViewMatrix[0][0] = 1.0;
     bbModelViewMatrix[0][1] = 0.0;
@@ -64,7 +64,7 @@ export const LightSpriteVertexSource = /*wgsl*/`
     bbModelViewMatrix[2][1] = 0.0;
     bbModelViewMatrix[2][2] = 1.0;
 
-    output.position = projection.matrix * bbModelViewMatrix * vec4<f32>(worldPos, 1.0);
+    output.position = projection.matrix * bbModelViewMatrix * vec4(worldPos, 1.0);
     return output;
   }
 `;
@@ -73,14 +73,14 @@ export const LightSpriteFragmentSource = /*wgsl*/`
   ${ColorConversions}
 
   struct FragmentInput {
-    @location(0) localPos : vec2<f32>,
-    @location(1) color: vec3<f32>,
+    @location(0) localPos : vec2f,
+    @location(1) color: vec3f,
   }
 
   @fragment
-  fn fragmentMain(input : FragmentInput) -> @location(0) vec4<f32> {
+  fn fragmentMain(input : FragmentInput) -> @location(0) vec4f {
     let distToCenter = length(input.localPos);
     let fade = (1.0 - distToCenter) * (1.0 / (distToCenter * distToCenter));
-    return vec4<f32>(linearTosRGB(input.color * fade), fade);
+    return vec4(linearTosRGB(input.color * fade), fade);
   }
 `;
