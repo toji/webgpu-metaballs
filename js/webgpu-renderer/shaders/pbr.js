@@ -24,16 +24,16 @@ import { ClusterLightsStructs, TileFunctions } from '../shaders/clustered-comput
 
 function PBR_VARYINGS(defines) { return wgsl`
 struct VertexOutput {
-  @builtin(position) position : vec4<f32>,
-  @location(0) worldPos : vec3<f32>,
-  @location(1) view : vec3<f32>, // Vector from vertex to camera.
-  @location(2) texCoord : vec2<f32>,
-  @location(3) color : vec4<f32>,
-  @location(4) normal : vec3<f32>,
+  @builtin(position) position : vec4f,
+  @location(0) worldPos : vec3f,
+  @location(1) view : vec3f, // Vector from vertex to camera.
+  @location(2) texCoord : vec2f,
+  @location(3) color : vec4f,
+  @location(4) normal : vec3f,
 
 #if ${defines.USE_NORMAL_MAP}
-  @location(5) tangent : vec3<f32>,
-  @location(6) bitangent : vec3<f32>,
+  @location(5) tangent : vec3f,
+  @location(6) bitangent : vec3f,
 #endif
 }
 `;
@@ -45,14 +45,14 @@ export function PBRVertexSource(defines) { return wgsl`
   ${ModelUniforms}
 
   struct VertexInputs {
-    @location(${ATTRIB_MAP.POSITION}) position : vec3<f32>,
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3<f32>,
-    @location(${ATTRIB_MAP.TEXCOORD_0}) texCoord : vec2<f32>,
+    @location(${ATTRIB_MAP.POSITION}) position : vec3f,
+    @location(${ATTRIB_MAP.NORMAL}) normal : vec3f,
+    @location(${ATTRIB_MAP.TEXCOORD_0}) texCoord : vec2f,
 #if ${defines.USE_NORMAL_MAP}
-    @location(${ATTRIB_MAP.TANGENT}) tangent : vec4<f32>,
+    @location(${ATTRIB_MAP.TANGENT}) tangent : vec4f,
 #endif
 #if ${defines.USE_VERTEX_COLOR}
-    @location(${ATTRIB_MAP.COLOR_0}) color : vec4<f32>,
+    @location(${ATTRIB_MAP.COLOR_0}) color : vec4f,
 #endif
   }
 
@@ -61,21 +61,21 @@ export function PBRVertexSource(defines) { return wgsl`
   @vertex
   fn main(input : VertexInputs) -> VertexOutput {
     var output : VertexOutput;
-    output.normal = normalize((model.matrix * vec4<f32>(input.normal, 0.0)).xyz);
+    output.normal = normalize((model.matrix * vec4(input.normal, 0.0)).xyz);
 
 #if ${defines.USE_NORMAL_MAP}
-    output.tangent = normalize((model.matrix * vec4<f32>(input.tangent.xyz, 0.0)).xyz);
+    output.tangent = normalize((model.matrix * vec4(input.tangent.xyz, 0.0)).xyz);
     output.bitangent = cross(output.normal, output.tangent) * input.tangent.w;
 #endif
 
 #if ${defines.USE_VERTEX_COLOR}
     output.color = input.color;
 #else
-    output.color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    output.color = vec4(1.0);
 #endif
 
     output.texCoord = input.texCoord;
-    let modelPos = model.matrix * vec4<f32>(input.position, 1.0);
+    let modelPos = model.matrix * vec4(input.position, 1.0);
     output.worldPos = modelPos.xyz;
     output.view = view.position - modelPos.xyz;
     output.position = projection.matrix * view.matrix * modelPos;
@@ -87,15 +87,15 @@ function PBRSurfaceInfo(defines) { return wgsl`
   ${PBR_VARYINGS(defines)}
 
   struct SurfaceInfo {
-    baseColor : vec4<f32>,
-    albedo : vec3<f32>,
+    baseColor : vec4f,
+    albedo : vec3f,
     metallic : f32,
     roughness : f32,
-    normal : vec3<f32>,
-    f0 : vec3<f32>,
+    normal : vec3f,
+    f0 : vec3f,
     ao : f32,
-    emissive : vec3<f32>,
-    v : vec3<f32>,
+    emissive : vec3f,
+    v : vec3f,
   };
 
   fn GetSurfaceInfo(input : VertexOutput) -> SurfaceInfo {
@@ -120,15 +120,15 @@ function PBRSurfaceInfo(defines) { return wgsl`
 #endif
 
 #if ${defines.USE_NORMAL_MAP}
-    let tbn = mat3x3<f32>(input.tangent, input.bitangent, input.normal);
+    let tbn = mat3x3(input.tangent, input.bitangent, input.normal);
     let N = textureSample(normalTexture, defaultSampler, input.texCoord).rgb;
-    surface.normal = normalize(tbn * (2.0 * N - vec3<f32>(1.0, 1.0, 1.0)));
+    surface.normal = normalize(tbn * (2.0 * N - vec3(1.0)));
 #else
     surface.normal = normalize(input.normal);
 #endif
 
-    let dielectricSpec = vec3<f32>(0.04, 0.04, 0.04);
-    surface.f0 = mix(dielectricSpec, surface.albedo, vec3<f32>(surface.metallic, surface.metallic, surface.metallic));
+    let dielectricSpec = vec3(0.04);
+    surface.f0 = mix(dielectricSpec, surface.albedo, vec3(surface.metallic));
 
 #if ${defines.USE_OCCLUSION}
     surface.ao = textureSample(occlusionTexture, defaultSampler, input.texCoord).r * material.occlusionStrength;
@@ -156,17 +156,17 @@ const LightType_Directional = 2u;
 
 struct PuctualLight {
   lightType : u32,
-  pointToLight : vec3<f32>,
+  pointToLight : vec3f,
   range : f32,
-  color : vec3<f32>,
+  color : vec3f,
   intensity : f32,
 }
 
-fn FresnelSchlick(cosTheta : f32, F0 : vec3<f32>) -> vec3<f32> {
-  return F0 + (vec3<f32>(1.0, 1.0, 1.0) - F0) * pow(1.0 - cosTheta, 5.0);
+fn FresnelSchlick(cosTheta : f32, F0 : vec3f) -> vec3f {
+  return F0 + (vec3(1.0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-fn DistributionGGX(N : vec3<f32>, H : vec3<f32>, roughness : f32) -> f32 {
+fn DistributionGGX(N : vec3f, H : vec3f, roughness : f32) -> f32 {
   let a      = roughness*roughness;
   let a2     = a*a;
   let NdotH  = max(dot(N, H), 0.0);
@@ -188,7 +188,7 @@ fn GeometrySchlickGGX(NdotV : f32, roughness : f32) -> f32 {
   return num / denom;
 }
 
-fn GeometrySmith(N : vec3<f32>, V : vec3<f32>, L : vec3<f32>, roughness : f32) -> f32 {
+fn GeometrySmith(N : vec3f, V : vec3f, L : vec3f, roughness : f32) -> f32 {
   let NdotV = max(dot(N, V), 0.0);
   let NdotL = max(dot(N, L), 0.0);
   let ggx2  = GeometrySchlickGGX(NdotV, roughness);
@@ -205,7 +205,7 @@ fn rangeAttenuation(range : f32, distance : f32) -> f32 {
   return clamp(1.0 - pow(distance / range, 4.0), 0.0, 1.0) / pow(distance, 2.0);
 }
 
-fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3<f32> {
+fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   let L = normalize(light.pointToLight);
   let H = normalize(surface.v + L);
   let distance = length(light.pointToLight);
@@ -215,18 +215,18 @@ fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3<f32> {
   let G = GeometrySmith(surface.normal, surface.v, L, surface.roughness);
   let F = FresnelSchlick(max(dot(H, surface.v), 0.0), surface.f0);
 
-  let kD = (vec3<f32>(1.0, 1.0, 1.0) - F) * (1.0 - surface.metallic);
+  let kD = (vec3(1.0) - F) * (1.0 - surface.metallic);
 
   let NdotL = max(dot(surface.normal, L), 0.0);
 
   let numerator = NDF * G * F;
   let denominator = max(4.0 * max(dot(surface.normal, surface.v), 0.0) * NdotL, 0.001);
-  let specular = numerator / vec3<f32>(denominator, denominator, denominator);
+  let specular = numerator / vec3(denominator);
 
   // add to outgoing radiance Lo
   let attenuation = rangeAttenuation(light.range, distance);
   let radiance = light.color * light.intensity * attenuation;
-  return (kD * surface.albedo / vec3<f32>(PI, PI, PI) + specular) * radiance * NdotL;
+  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
 }`;
 
 export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
@@ -241,14 +241,14 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
   ${PBRFunctions}
 
   @fragment
-  fn main(input : VertexOutput) -> @location(0) vec4<f32> {
+  fn main(input : VertexOutput) -> @location(0) vec4f {
     let surface = GetSurfaceInfo(input);
     if (surface.baseColor.a < 0.05) {
       discard;
     }
 
     // reflectance equation
-    var Lo = vec3<f32>(0.0, 0.0, 0.0);
+    var Lo = vec3(0.0);
 
     let clusterIndex = getClusterIndex(input.position);
     let lightOffset  = clusterLights.lights[clusterIndex].offset;
@@ -270,6 +270,6 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
 
     let ambient = globalLights.ambient * surface.albedo * surface.ao;
     let color = linearTosRGB(Lo + ambient + surface.emissive);
-    return vec4<f32>(color, surface.baseColor.a);
+    return vec4(color, surface.baseColor.a);
   }`;
 };
