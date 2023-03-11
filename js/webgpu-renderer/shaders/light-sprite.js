@@ -22,7 +22,7 @@ import { ProjectionUniforms, ViewUniforms, LightUniforms, ColorConversions } fro
 
 export const LightSpriteVertexSource = /*wgsl*/`
   var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
-    vec2(-1.0, 1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, -1.0)
+    vec2f(-1.0, 1.0), vec2f(1.0, 1.0), vec2f(-1.0, -1.0), vec2f(1.0, -1.0)
   );
 
   ${ProjectionUniforms}

@@ -38,7 +38,7 @@ export const MAX_LIGHTS_PER_CLUSTER = 20;
 export const CLUSTER_LIGHTS_SIZE = (8 * TOTAL_TILES) + (4 * MAX_LIGHTS_PER_CLUSTER * TOTAL_TILES) + 4;
 
 export const TileFunctions = /*wgsl*/`
-const tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
+const tileCount = vec3u(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
 
 fn linearDepth(depthSample : f32) -> f32 {
   return projection.zFar * projection.zNear / fma(depthSample, projection.zNear-projection.zFar, projection.zFar);
@@ -109,8 +109,8 @@ export const ClusterBoundsSource = /*wgsl*/`
     return clipToView(clip);
   }
 
-  const tileCount = vec3(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
-  const eyePos = vec3(0.0);
+  const tileCount = vec3u(${TILE_COUNT[0]}u, ${TILE_COUNT[1]}u, ${TILE_COUNT[2]}u);
+  const eyePos = vec3f(0.0, 0.0, 0.0);
 
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn main(@builtin(global_invocation_id) global_id : vec3u) {

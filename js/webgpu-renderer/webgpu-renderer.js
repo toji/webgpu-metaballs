@@ -18,6 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+// Some shims to make Mozilla's implementation happy.
+import './moz-shim.js';
+
 // This import installs hooks that help us output better formatted shader errors
 import './wgsl-debug-helper.js';
 
@@ -292,6 +295,16 @@ export class WebGPURenderer extends Renderer {
     if (!this.device) return;
 
     // Canvas/context resize already handled in base class.
+
+    if (navigator.userAgent.indexOf("Firefox") > 0) {
+      // Mozilla's implementation still requires you to call configure on every
+      // resize.
+      this.context.configure({
+        device: this.device,
+        format: this.contextFormat,
+        size: { width, height }
+      });
+    }
 
     const msaaColorTexture = this.device.createTexture({
       size: { width, height },
