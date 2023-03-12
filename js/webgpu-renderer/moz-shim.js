@@ -12,6 +12,21 @@ if (!('end' in GPUComputePassEncoder.prototype)) {
 // Mozilla's implementation
 if (navigator.userAgent.indexOf("Firefox") > 0) {
 
+  const MESSAGE_STYLE = {
+    'info': {
+      icon: 'ℹ️',
+      logFn: console.info,
+    },
+    'warning': {
+      icon: '⚠️',
+      logFn: console.warn,
+    },
+    'error': {
+      icon: '⛔',
+      logFn: console.error,
+    }
+  }
+
   const oldCreateShaderModule = GPUDevice.prototype.createShaderModule;
   GPUDevice.prototype.createShaderModule = function (descriptor) {
     // Search and replace several symbols to ensure compat
@@ -25,7 +40,54 @@ if (navigator.userAgent.indexOf("Firefox") > 0) {
         .replaceAll('mat4x4f', 'mat4x4<f32>');
         // TODO: More. Probably with a more general regex.
 
-    return oldCreateShaderModule.call(this, descriptor);
+
+    // Mozilla's implementation doesn't appear to echo shader compilation errors to the console by
+    // default. So install a shim that does that for us.
+    const shaderModule = oldCreateShaderModule.call(this, descriptor);
+
+    shaderModule.compilationInfo().then((info) => {
+      if (!info.messages.length) {
+        return;
+      }
+
+      const messageCount = {
+        error: 0,
+        warning: 0,
+        info: 0,
+      };
+
+      for (const message of info.messages) {
+        messageCount[message.type] += 1;
+      }
+
+      if (messageCount.error == 0 && validationError) {
+        messageCount.error = 1;
+      }
+
+      const label = shaderModule.label;
+      let groupLabel = (label ? `"${label}"` : 'Shader') +
+          ' returned compilation messages:';
+      for (const type in messageCount) {
+        if (messageCount[type] > 0) {
+          groupLabel += ` ${messageCount[type]}${MESSAGE_STYLE[type].icon}`;
+        }
+      }
+
+      if (messageCount.error == 0) {
+        console.groupCollapsed(groupLabel);
+      } else {
+        console.group(groupLabel);
+      }
+
+      for (const message of info.messages) {
+        const type = message.type;
+        MESSAGE_STYLE[type].logFn(message.message);
+      }
+
+      console.groupEnd();
+    });
+
+    return shaderModule;
   };
 
   function patchPipelineAutoLayout(name) {
