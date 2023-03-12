@@ -21,9 +21,6 @@
 // Some shims to make Mozilla's implementation happy.
 import './moz-shim.js';
 
-// This import installs hooks that help us output better formatted shader errors
-import './wgsl-debug-helper.js';
-
 import { Renderer } from '../renderer.js';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
