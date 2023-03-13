@@ -293,16 +293,6 @@ export class WebGPURenderer extends Renderer {
 
     // Canvas/context resize already handled in base class.
 
-    if (navigator.userAgent.indexOf("Firefox") > 0) {
-      // Mozilla's implementation still requires you to call configure on every
-      // resize.
-      this.context.configure({
-        device: this.device,
-        format: this.contextFormat,
-        size: { width, height }
-      });
-    }
-
     const msaaColorTexture = this.device.createTexture({
       size: { width, height },
       sampleCount: SAMPLE_COUNT,

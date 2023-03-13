@@ -145,4 +145,48 @@ if (navigator.userAgent.indexOf("Firefox") > 0) {
 
     return oldBeginRenderPass.call(this, descriptor);
   };
+
+  // Mozilla's implementation doesn't expose the canvas attribute on the context.
+  const oldGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function (...args) {
+    const context = oldGetContext.apply(this, args);
+    if (args[0] == 'webgpu') {
+      context.canvas = this; // TODO: Make this read only
+    }
+    return context;
+  }
+
+  // Mozilla's implementation still requires that configure be called on every canvas resize.
+  const contextObservers = {};
+  const oldConfigure = GPUCanvasContext.prototype.configure;
+  GPUCanvasContext.prototype.configure = function (descriptor) {
+    const context = this;
+
+    if (!contextObservers[context]) {
+      contextObservers[context] = new MutationObserver(function(mutations) {
+        let needsReconfigure = false;
+        for (const mutation of mutations) {
+          if (mutation.attributeName == 'width' || mutation.attributeName == 'height') {
+            needsReconfigure = true;
+          }
+        }
+        if (needsReconfigure) {
+          oldConfigure.call(context, descriptor);
+        }
+      });
+    }
+
+    contextObservers[context].observe(context.canvas, { attributes: true });
+
+    oldConfigure.call(context, descriptor);
+  };
+
+  const oldUnconfigure = GPUCanvasContext.prototype.unconfigure;
+  GPUCanvasContext.prototype.unconfigure = function (descriptor) {
+    if (contextObservers[this]) {
+      contextObservers[this].disconnect();
+    }
+
+    oldUnconfigure.call(this, descriptor);
+  };
 }
