@@ -8,6 +8,13 @@ if (!('end' in GPUComputePassEncoder.prototype)) {
   GPUComputePassEncoder.prototype.end = GPUComputePassEncoder.prototype.endPass;
 }
 
+if (!('getPreferredCanvasFormat' in navigator.gpu)) {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  navigator.gpu.getPreferredCanvasFormat = function() {
+    return isMobile ? 'rgba8unorm' : 'bgra8unorm';
+  };
+}
+
 // Applies various patches to WebGPU inputs to make them more compatible with
 // Mozilla's implementation
 if (navigator.userAgent.indexOf("Firefox") > 0) {

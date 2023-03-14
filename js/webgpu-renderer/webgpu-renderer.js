@@ -58,7 +58,7 @@ export class WebGPURenderer extends Renderer {
     super();
 
     this.sampleCount = SAMPLE_COUNT;
-    this.contextFormat = 'bgra8unorm';
+    this.contextFormat = navigator.gpu.getPreferredCanvasFormat();
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('webgpu');
@@ -92,12 +92,6 @@ export class WebGPURenderer extends Renderer {
     }*/
 
     this.device = await this.adapter.requestDevice({requiredFeatures});
-
-    if (navigator.gpu.getPreferredCanvasFormat) {
-      this.contextFormat = navigator.gpu.getPreferredCanvasFormat();
-    } else if (this.context.getPreferredFormat) {
-      this.contextFormat = this.context.getPreferredFormat(this.adapter);
-    }
 
     this.context.configure({
       device: this.device,
