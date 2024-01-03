@@ -1,3 +1,7 @@
+// NO LONGER USED. Leaving it here for a bit just in case I need to reference it
+// but this shim is no longer used by any of my samples, including webgpu-metaballs.
+// It was required at one point in time, but Firefox's WebGPU implementation has
+// made great strides since then, and it's no longer necessary.
 
 // Mozilla's implementation has not yet updated from endPass() to end()
 if (!('end' in GPURenderPassEncoder.prototype)) {
