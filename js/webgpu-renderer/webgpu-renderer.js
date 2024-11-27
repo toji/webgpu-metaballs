@@ -18,6 +18,8 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
+import { vec3, mat4 } from 'gl-matrix';
+
 import { Renderer } from '../renderer.js';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
@@ -448,7 +450,7 @@ export class WebGPURenderer extends Renderer {
   onXRFrame(timestamp, timeDelta, xrFrame) {
     // Update the View uniforms buffer with the values. These are used by most shader programs
     // and don't change for the duration of the frame.
-    this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
+    //this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
 
     // Update the light unform buffer with the latest values as well.
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
@@ -461,6 +463,14 @@ export class WebGPURenderer extends Renderer {
     if (pose) {
       for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
         const view = pose.views[viewIndex];
+
+        // THIS DOESN'T WORK FOR MULTIPLE VIEWS!
+        mat4.copy(this.projectionMatrix, view.projectionMatrix);
+        mat4.invert(this.inverseProjectionMatrix, this.projectionMatrix);
+        mat4.copy(this.viewMatrix, view.transform.inverse.matrix);
+        vec3.copy(this.cameraPosition, [view.transform.position.x, view.transform.position.y, view.transform.position.z]);
+        this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
+
         let subImage = this.xrBinding.getViewSubImage(this.xrLayer, view);
 
         const renderPass = commandEncoder.beginRenderPass({
