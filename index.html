@@ -39,6 +39,13 @@
         top: 1em;
         right: 1em;
       }
+
+      .xr-button {
+        position: absolute;
+        bottom: 1em;
+        right: 1em;
+        z-index: 10;
+      }
     </style>
   </head>
   <body>
@@ -64,6 +71,8 @@
 
       let renderer = null;
       let gltf = null;
+      let xrSession = null;
+      let xrButton = null;
 
       const camera = new OrbitCamera();
       camera.target = [0, 1, 0];
@@ -75,8 +84,8 @@
         scene: './media/models/dungeon/dungeon.glb',
         metaballMethod: 'gpuGenerated',
         renderLightSprites: true,
-        renderEnvironment: true,
-        environmentLights: true,
+        renderEnvironment: false,
+        environmentLights: false,
         metaballLights: true,
         metaballStyle: 'lava',
         metaballResolution: 0.075
@@ -152,6 +161,49 @@
         }
       });
 
+      document.body.appendChild(gui.domElement);
+
+      async function toggleWebXR() {
+        if (xrSession) {
+          xrSession.end();
+          return;
+        }
+
+        xrSession = await navigator.xr.requestSession('immersive-vr', {
+          requiredFeatures: ['webgpu'],
+        });
+        console.log('Got a WebXR Session!');
+        renderer.setWebXRSession(xrSession);
+        xrButton.innerText = 'Exit VR';
+        xrButton.classList.add('xr-active');
+
+        xrSession.addEventListener('end', () => {
+          renderer.setWebXRSession(null);
+          xrSession = null;
+          xrButton.innerText = 'Enter VR';
+          xrButton.classList.remove('xr-active');
+        });
+      }
+
+      async function enableWebXRButton() {
+        if (!('XRGPUBinding' in window)) {
+          console.log('WebGPU/WebXR bindings not supported.');
+          return;
+        }
+        const supported = await navigator.xr.isSessionSupported('immersive-vr');
+        if (!supported) {
+          console.log('immersive-vr sessions not supported.');
+          return;
+        }
+
+        xrButton = document.createElement('button');
+        xrButton.innerText = 'Enter VR';
+        xrButton.classList.add('xr-button');
+        xrButton.addEventListener('click', toggleWebXR);
+        document.body.appendChild(xrButton);
+        console.log('XR Button Added');
+      }
+
       async function init() {
         renderer = new WebGPURenderer();
 
@@ -172,6 +224,7 @@
           renderer.setMetaballStyle(appSettings.metaballStyle);
           renderer.setMetaballMethod(appSettings.metaballMethod);
 
+          enableWebXRButton();
 
           renderer.start();
 

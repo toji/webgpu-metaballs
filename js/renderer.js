@@ -147,8 +147,11 @@ export class Renderer {
     this.drawMetaballs = true;
     this.marchingCubes = null;
 
+    this.xrSession = null;
+
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
+      if (this.xrSession) { return; }
       const timeDelta = lastTimestamp == -1 ? 0 : timestamp - lastTimestamp;
       lastTimestamp = timestamp;
       this.rafId = requestAnimationFrame(this.frameCallback);
@@ -165,6 +168,26 @@ export class Renderer {
 
       if (this.stats) {
         this.stats.endFrame();
+      }
+    };
+
+    this.xrFrameCallback = (timestamp, xrFrame) => {
+      const timeDelta = lastTimestamp == -1 ? 0 : timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
+      this.rafId = this.xrSession.requestAnimationFrame(this.xrFrameCallback);
+      this.frameCount++;
+      if (this.frameCount % 200 == 0) { return; }
+
+      if (this.stats) {
+        this.stats.begin();
+      }
+
+      this.beforeFrame(timestamp, timeDelta);
+
+      this.onXRFrame(timestamp, timeDelta, xrFrame);
+
+      if (this.stats) {
+        this.stats.end();
       }
     };
 
@@ -341,9 +364,26 @@ export class Renderer {
     // Override with renderer-specific resize logic.
   }
 
-  onFrame(timestamp) {
+  onFrame(timestamp, timeDelta) {
     // Override with renderer-specific frame logic.
   }
 
+  onXRFrame(timestamp, timeDelta, xrFrame) {
+    // Override with renderer-specific frame logic.
+  }
 
+  async setWebXRSession(session) {
+    this.xrSession = session;
+    if (!this.xrSession) {
+      this.onXREnded();
+      requestAnimationFrame(this.frameCallback);
+      return;
+    }
+
+    await this.onXRStarted();
+    this.xrSession.requestAnimationFrame(this.xrFrameCallback);
+  }
+
+  async onXRStarted() {}
+  onXREnded() {}
 }
