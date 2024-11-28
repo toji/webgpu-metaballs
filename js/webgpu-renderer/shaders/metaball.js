@@ -60,7 +60,7 @@ export const MetaballFieldComputeSource = /*wgsl*/`
 
   fn surfaceFunc(position : vec3f) -> f32 {
     var result = 0.0;
-    for (var i = 0u; i < metaballs.ballCount; i = i + 1u) {
+    for (var i = 0u; i < metaballs.ballCount; i = i + 1) {
       let ball = metaballs.balls[i];
       let dist = distance(position, ball.position);
       let val = ball.strength / (0.000001 + (dist * dist)) - ball.subtract;
@@ -138,10 +138,10 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   }
 
   fn normalAt(index : vec3u) -> vec3f {
-    return vec3(
-      valueAt(index - vec3(1u, 0u, 0u)) - valueAt(index + vec3(1u, 0u, 0u)),
-      valueAt(index - vec3(0u, 1u, 0u)) - valueAt(index + vec3(0u, 1u, 0u)),
-      valueAt(index - vec3(0u, 0u, 1u)) - valueAt(index + vec3(0u, 0u, 1u))
+    return vec3f(
+      valueAt(index - vec3u(1, 0, 0)) - valueAt(index + vec3u(1, 0, 0)),
+      valueAt(index - vec3u(0, 1, 0)) - valueAt(index + vec3u(0, 1, 0)),
+      valueAt(index - vec3u(0, 0, 1)) - valueAt(index + vec3u(0, 0, 1))
     );
   }
 
@@ -149,42 +149,42 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   var<private> positions : array<vec3f, 12>;
   var<private> normals : array<vec3f, 12>;
   var<private> indices : array<u32, 12>;
-  var<private> cubeVerts : u32 = 0u;
+  var<private> cubeVerts = 0u;
 
   fn interpX(index : u32, i : vec3u, va : f32, vb : f32) {
     let mu = (volume.threshold - va) / (vb - va);
-    positions[cubeVerts] = positionAt(i) + vec3(volume.step.x * mu, 0.0, 0.0);
+    positions[cubeVerts] = positionAt(i) + vec3f(volume.step.x * mu, 0, 0);
 
     let na = normalAt(i);
-    let nb = normalAt(i + vec3(1u, 0u, 0u));
+    let nb = normalAt(i + vec3u(1, 0, 0));
     normals[cubeVerts] = mix(na, nb, vec3(mu));
 
     indices[index] = cubeVerts;
-    cubeVerts = cubeVerts + 1u;
+    cubeVerts = cubeVerts + 1;
   }
 
   fn interpY(index : u32, i : vec3u, va : f32, vb : f32) {
     let mu = (volume.threshold - va) / (vb - va);
-    positions[cubeVerts] = positionAt(i) + vec3(0.0, volume.step.y * mu, 0.0);
+    positions[cubeVerts] = positionAt(i) + vec3f(0, volume.step.y * mu, 0);
 
     let na = normalAt(i);
-    let nb = normalAt(i + vec3(0u, 1u, 0u));
+    let nb = normalAt(i + vec3u(0, 1, 0));
     normals[cubeVerts] = mix(na, nb, vec3(mu));
 
     indices[index] = cubeVerts;
-    cubeVerts = cubeVerts + 1u;
+    cubeVerts = cubeVerts + 1;
   }
 
   fn interpZ(index : u32, i : vec3u, va : f32, vb : f32) {
     let mu = (volume.threshold - va) / (vb - va);
-    positions[cubeVerts] = positionAt(i) + vec3(0.0, 0.0, volume.step.z * mu);
+    positions[cubeVerts] = positionAt(i) + vec3f(0, 0, volume.step.z * mu);
 
     let na = normalAt(i);
-    let nb = normalAt(i + vec3(0u, 0u, 1u));
+    let nb = normalAt(i + vec3u(0, 0, 1));
     normals[cubeVerts] = mix(na, nb, vec3(mu));
 
     indices[index] = cubeVerts;
-    cubeVerts = cubeVerts + 1u;
+    cubeVerts = cubeVerts + 1;
   }
 
   // Main marching cubes algorithm
@@ -192,13 +192,13 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
-    let i1 = global_id + vec3(1u, 0u, 0u);
-    let i2 = global_id + vec3(1u, 1u, 0u);
-    let i3 = global_id + vec3(0u, 1u, 0u);
-    let i4 = global_id + vec3(0u, 0u, 1u);
-    let i5 = global_id + vec3(1u, 0u, 1u);
-    let i6 = global_id + vec3(1u, 1u, 1u);
-    let i7 = global_id + vec3(0u, 1u, 1u);
+    let i1 = global_id + vec3u(1, 0, 0);
+    let i2 = global_id + vec3u(1, 1, 0);
+    let i3 = global_id + vec3u(0, 1, 0);
+    let i4 = global_id + vec3u(0, 0, 1);
+    let i5 = global_id + vec3u(1, 0, 1);
+    let i6 = global_id + vec3u(1, 1, 1);
+    let i7 = global_id + vec3u(0, 1, 1);
 
     let v0 = valueAt(i0);
     let v1 = valueAt(i1);
@@ -210,69 +210,55 @@ export const MarchingCubesComputeSource = /*wgsl*/`
     let v7 = valueAt(i7);
 
     var cubeIndex = 0u;
-    if (v0 < volume.threshold) { cubeIndex = cubeIndex | 1u; }
-    if (v1 < volume.threshold) { cubeIndex = cubeIndex | 2u; }
-    if (v2 < volume.threshold) { cubeIndex = cubeIndex | 4u; }
-    if (v3 < volume.threshold) { cubeIndex = cubeIndex | 8u; }
-    if (v4 < volume.threshold) { cubeIndex = cubeIndex | 16u; }
-    if (v5 < volume.threshold) { cubeIndex = cubeIndex | 32u; }
-    if (v6 < volume.threshold) { cubeIndex = cubeIndex | 64u; }
-    if (v7 < volume.threshold) { cubeIndex = cubeIndex | 128u; }
+    if (v0 < volume.threshold) { cubeIndex = cubeIndex | 1; }
+    if (v1 < volume.threshold) { cubeIndex = cubeIndex | 2; }
+    if (v2 < volume.threshold) { cubeIndex = cubeIndex | 4; }
+    if (v3 < volume.threshold) { cubeIndex = cubeIndex | 8; }
+    if (v4 < volume.threshold) { cubeIndex = cubeIndex | 16; }
+    if (v5 < volume.threshold) { cubeIndex = cubeIndex | 32; }
+    if (v6 < volume.threshold) { cubeIndex = cubeIndex | 64; }
+    if (v7 < volume.threshold) { cubeIndex = cubeIndex | 128; }
 
     let edges = tables.edges[cubeIndex];
 
-    // Once we have atomics we can early-terminate here if edges == 0
-    //if (edges == 0u) { return; }
+    // Early-terminate here if edges == 0
+    if (edges == 0u) { return; }
 
-    if ((edges & 1u) != 0u) { interpX(0u, i0, v0, v1); }
-    if ((edges & 2u) != 0u) { interpY(1u, i1, v1, v2); }
-    if ((edges & 4u) != 0u) { interpX(2u, i3, v3, v2); }
-    if ((edges & 8u) != 0u) { interpY(3u, i0, v0, v3); }
-    if ((edges & 16u) != 0u) { interpX(4u, i4, v4, v5); }
-    if ((edges & 32u) != 0u) { interpY(5u, i5, v5, v6); }
-    if ((edges & 64u) != 0u) { interpX(6u, i7, v7, v6); }
-    if ((edges & 128u) != 0u) { interpY(7u, i4, v4, v7); }
-    if ((edges & 256u) != 0u) { interpZ(8u, i0, v0, v4); }
-    if ((edges & 512u) != 0u) { interpZ(9u, i1, v1, v5); }
-    if ((edges & 1024u) != 0u) { interpZ(10u, i2, v2, v6); }
-    if ((edges & 2048u) != 0u) { interpZ(11u, i3, v3, v7); }
+    if ((edges & 1) != 0) { interpX(0, i0, v0, v1); }
+    if ((edges & 2) != 0) { interpY(1, i1, v1, v2); }
+    if ((edges & 4) != 0) { interpX(2, i3, v3, v2); }
+    if ((edges & 8) != 0) { interpY(3, i0, v0, v3); }
+    if ((edges & 16) != 0) { interpX(4, i4, v4, v5); }
+    if ((edges & 32) != 0) { interpY(5, i5, v5, v6); }
+    if ((edges & 64) != 0) { interpX(6, i7, v7, v6); }
+    if ((edges & 128) != 0) { interpY(7, i4, v4, v7); }
+    if ((edges & 256) != 0) { interpZ(8, i0, v0, v4); }
+    if ((edges & 512) != 0) { interpZ(9, i1, v1, v5); }
+    if ((edges & 1024) != 0) { interpZ(10, i2, v2, v6); }
+    if ((edges & 2048) != 0) { interpZ(11, i3, v3, v7); }
 
-    let triTableOffset = (cubeIndex << 4u) + 1u;
-    let indexCount = u32(tables.tris[triTableOffset - 1u]);
+    let triTableOffset = (cubeIndex << 4) + 1;
+    let indexCount = u32(tables.tris[triTableOffset - 1]);
 
-    // In an ideal world this offset is tracked as an atomic.
+    // Increment atomics that track the current vertex and index offsets
     var firstVertex = atomicAdd(&drawOut.vertexCount, cubeVerts);
-    //let firstIndex = atomicAdd(&drawOut.indexCount, indexCount);
-
-    // Instead we have to pad the vertex/index buffers with the maximum possible number of values
-    // and create degenerate triangles to fill the empty space, which is a waste of GPU cycles.
-    let bufferOffset = (global_id.x +
-                        global_id.y * volume.size.x +
-                        global_id.z * volume.size.x * volume.size.y);
-    let firstIndex = bufferOffset*15u;
-    //firstVertex = bufferOffset*12u;
+    let firstIndex = atomicAdd(&drawOut.indexCount, indexCount);
 
     // Copy positions to output buffer
-    for (var i = 0u; i < cubeVerts; i = i + 1u) {
-      positionsOut.values[firstVertex*3u + i*3u] = positions[i].x;
-      positionsOut.values[firstVertex*3u + i*3u + 1u] = positions[i].y;
-      positionsOut.values[firstVertex*3u + i*3u + 2u] = positions[i].z;
+    for (var i = 0u; i < cubeVerts; i = i + 1) {
+      positionsOut.values[firstVertex*3 + i*3] = positions[i].x;
+      positionsOut.values[firstVertex*3 + i*3 + 1] = positions[i].y;
+      positionsOut.values[firstVertex*3 + i*3 + 2] = positions[i].z;
 
-      normalsOut.values[firstVertex*3u + i*3u] = normals[i].x;
-      normalsOut.values[firstVertex*3u + i*3u + 1u] = normals[i].y;
-      normalsOut.values[firstVertex*3u + i*3u + 2u] = normals[i].z;
+      normalsOut.values[firstVertex*3 + i*3] = normals[i].x;
+      normalsOut.values[firstVertex*3 + i*3 + 1] = normals[i].y;
+      normalsOut.values[firstVertex*3 + i*3 + 2] = normals[i].z;
     }
 
     // Write out the indices
-    for (var i = 0u; i < indexCount; i = i + 1u) {
+    for (var i = 0u; i < indexCount; i = i + 1) {
       let index = tables.tris[triTableOffset + i];
       indicesOut.tris[firstIndex + i] = firstVertex + indices[index];
-    }
-
-    // Write out degenerate triangles whenever we don't have a real index in order to keep our
-    // stride constant. Again, this can go away once we have atomics.
-    for (var i = indexCount; i < 15u; i = i + 1u) {
-      indicesOut.tris[firstIndex + i] = firstVertex;
     }
   }
 `;
@@ -298,9 +284,9 @@ export const MetaballVertexSource = /*wgsl*/`
     var output : VertexOutput;
     output.worldPosition = input.position;
     output.normal = input.normal;
-    output.flow = vec3(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+    output.flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
 
-    output.position = projection.matrix * view.matrix * vec4(input.position, 1.0);
+    output.position = projection.matrix * view.matrix * vec4f(input.position, 1);
     return output;
   }
 `;
@@ -322,7 +308,7 @@ export const MetaballFragmentSource = /*wgsl*/`
     let normal = normalize(input.normal);
 
     var blending = abs(normal);
-    blending = normalize(max(blending, vec3(0.00001))); // Force weights to sum to 1.0
+    blending = normalize(max(blending, vec3f(0.00001))); // Force weights to sum to 1.0
 
     let xTex = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
     let yTex = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
@@ -330,7 +316,7 @@ export const MetaballFragmentSource = /*wgsl*/`
     // blend the results of the 3 planar projections.
     let tex = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
-    return vec4(linearTosRGB(tex.xyz), 1.0);
+    return vec4f(linearTosRGB(tex.xyz), 1);
   }
 `;
 
@@ -340,7 +326,7 @@ export const MetaballVertexPointSource = /*wgsl*/`
   ${ViewUniforms}
 
   var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
-    vec2(-1.0, 1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, -1.0)
+    vec2f(-1, 1), vec2f(1, 1), vec2f(-1, -1), vec2f(1, -1)
   );
 
   struct VertexInput {
@@ -361,7 +347,7 @@ export const MetaballVertexPointSource = /*wgsl*/`
     var output : VertexOutput;
     output.worldPosition = input.position;
     output.normal = input.normal;
-    output.flow = vec3(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+    output.flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
 
     var bbModelViewMatrix : mat4x4f;
     bbModelViewMatrix[3] = vec4(input.position, 1.0);
@@ -378,7 +364,7 @@ export const MetaballVertexPointSource = /*wgsl*/`
     bbModelViewMatrix[2][1] = 0.0;
     bbModelViewMatrix[2][2] = 1.0;
 
-    output.position = projection.matrix * bbModelViewMatrix * vec4f(pos[input.vertexIndex] * 0.005, 0.0, 1.0);
+    output.position = projection.matrix * bbModelViewMatrix * vec4f(pos[input.vertexIndex] * 0.005, 0, 1);
     return output;
   }
 `;
@@ -397,6 +383,6 @@ export const MetaballFragmentPointSource = /*wgsl*/`
 
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
-    return vec4(1.0);
+    return vec4f(1);
   }
 `;

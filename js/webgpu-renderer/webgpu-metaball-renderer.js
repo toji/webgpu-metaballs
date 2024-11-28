@@ -42,9 +42,6 @@ class WebGPUMetaballRendererBase {
     this.vertexBufferSize = (Float32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
     this.indexBufferSize = Uint32Array.BYTES_PER_ELEMENT * 15 * this.marchingCubeCells;
 
-    //this.vertexBufferSize = METABALLS_VERTEX_BUFFER_SIZE;
-    //this.indexBufferSize = METABALLS_INDEX_BUFFER_SIZE;
-
     this.indexCount = 0;
 
     // Metaball resources
@@ -584,7 +581,8 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     });
 
     this.indirectArray = new Uint32Array(9);
-    this.indirectArray[0] = 4;
+    this.indirectArray[0] = 4; // Number of verticies for point rendering
+    this.indirectArray[5] = 1; // Number of instances for normal rendering
     this.indirectBuffer = this.device.createBuffer({
       size: this.indirectArray.byteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
@@ -720,15 +718,15 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
   }
 
-  /*draw(passEncoder) {
+  draw(passEncoder) {
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
     passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
     passEncoder.setVertexBuffer(0, this.vertexBuffer);
     passEncoder.setVertexBuffer(1, this.normalBuffer);
     passEncoder.setIndexBuffer(this.indexBuffer, 'uint32');
-    passEncoder.drawIndexedIndirect(this.indirectBuffer, 4);
-  }*/
+    passEncoder.drawIndexedIndirect(this.indirectBuffer, 16);
+  }
 
   // TODO: DrawIndirect once the buffers are dynamically packed.
 }
