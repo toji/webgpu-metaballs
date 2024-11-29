@@ -721,7 +721,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
   }
 
-  draw(passEncoder) {
+  /*draw(passEncoder) {
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
     passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
@@ -729,7 +729,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     passEncoder.setVertexBuffer(1, this.normalBuffer);
     passEncoder.setIndexBuffer(this.indexBuffer, 'uint32');
     passEncoder.drawIndexedIndirect(this.indirectBuffer, 16);
-  }
+  }*/
 
   // TODO: DrawIndirect once the buffers are dynamically packed.
 }
