@@ -717,6 +717,8 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     passEncoder.end();
 
     this.device.queue.submit([commandEncoder.finish()]);
+
+    this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
   }
 
   draw(passEncoder) {
