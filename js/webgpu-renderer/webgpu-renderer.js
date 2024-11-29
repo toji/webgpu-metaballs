@@ -25,7 +25,7 @@ import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
 
-import { GPUStats } from './gpu-stats.js';
+//import { GPUStats } from './gpu-stats.js';
 
 import {
   MetaballWriteBuffer,
@@ -36,6 +36,7 @@ import {
   MetaballComputeRenderer,
   MetaballComputePointRenderer,
 } from './webgpu-metaball-renderer.js';
+import { TimestampHelper } from './timestamp-helper.js';
 
 const MetaballMethods = {
   writeBuffer: MetaballWriteBuffer,
@@ -60,7 +61,7 @@ export class WebGPURenderer extends Renderer {
 
     this.context = this.canvas.getContext('webgpu');
 
-    this.gpuStats = new GPUStats();
+    //this.gpuStats = new GPUStats();
     this.metaballMethod = null;
   }
 
@@ -84,9 +85,9 @@ export class WebGPURenderer extends Renderer {
     }
 
     // Enable timestamp queries if available
-    /*if (this.adapter.features.has('timestamp-query') != -1) {
+    if (this.adapter.features.has('timestamp-query') != -1) {
       requiredFeatures.push('timestamp-query');
-    }*/
+    }
 
     this.device = await this.adapter.requestDevice({requiredFeatures});
 
@@ -123,7 +124,7 @@ export class WebGPURenderer extends Renderer {
 
     this.renderPassDescriptor = {
       colorAttachments: [this.colorAttachment],
-      depthStencilAttachment: this.depthAttachment
+      depthStencilAttachment: this.depthAttachment,
     };
 
     this.bindGroupLayouts = {
@@ -277,6 +278,8 @@ export class WebGPURenderer extends Renderer {
 
     this.metaballRenderer = null;
     this.metaballsNeedUpdate = true;
+
+    this.timestampHelper = new TimestampHelper(this.device);
   }
 
   onResize(width, height) {
@@ -359,13 +362,14 @@ export class WebGPURenderer extends Renderer {
         return;
       }*/
 
-      await this.metaballRenderer.update(this.marchingCubes);
+      await this.metaballRenderer.update(this.marchingCubes, this.timestampHelper);
+
       this.metaballsNeedUpdate = true;
     }
   }
 
   onFrame(timestamp) {
-    this.gpuStats.begin();
+    //this.gpuStats.begin();
 
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
@@ -380,6 +384,8 @@ export class WebGPURenderer extends Renderer {
 
     const commandEncoder = this.device.createCommandEncoder({});
     this.clusteredLights.updateClusterLights(commandEncoder);
+
+    this.renderPassDescriptor.timestampWrites = this.timestampHelper.timestampWrites('Rendering');
 
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
@@ -399,9 +405,18 @@ export class WebGPURenderer extends Renderer {
     }
 
     passEncoder.end();
+
+    this.timestampHelper.resolve(commandEncoder);
+
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
 
-    this.gpuStats.end();
+    this.timestampHelper.read().then((results) => {
+      for (let [key, result] of Object.entries(results)) {
+        this.stats.addSample(key, result);
+      }
+    });
+
+    //this.gpuStats.end();
   }
 }

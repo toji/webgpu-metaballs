@@ -686,13 +686,15 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.device.queue.writeBuffer(this.indirectBuffer, 0, this.indirectArray);
   }
 
-  update(marchingCubes) {
+  update(marchingCubes, timestampHelper) {
     // Update the volume buffer with the latest isosurface values.
     //this.device.queue.writeBuffer(this.volumeBuffer, 64, marchingCubes.volume.values, 0, this.volumeElements);
 
     // Run the compute shader to fill the position/normal/index buffers.
     const commandEncoder = this.device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
+    const passEncoder = commandEncoder.beginComputePass({
+      timestampWrites: timestampHelper.timestampWrites('Compute')
+    });
 
     const dispatchSize = [
       this.volume.width / WORKGROUP_SIZE[0],
@@ -713,9 +715,8 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     }
 
     passEncoder.end();
-    this.device.queue.submit([commandEncoder.finish()]);
 
-    this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
+    this.device.queue.submit([commandEncoder.finish()]);
   }
 
   draw(passEncoder) {
