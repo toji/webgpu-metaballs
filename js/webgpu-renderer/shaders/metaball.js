@@ -263,9 +263,10 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   }
 `;
 
-export const MetaballVertexSource = /*wgsl*/`
+export const MetaballRenderSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
+  ${ColorConversions}
 
   struct VertexInput {
     @location(${ATTRIB_MAP.POSITION}) position : vec3f,
@@ -289,19 +290,9 @@ export const MetaballVertexSource = /*wgsl*/`
     output.position = projection.matrix * view.matrix * vec4f(input.position, 1);
     return output;
   }
-`;
-
-export const MetaballFragmentSource = /*wgsl*/`
-  ${ColorConversions}
 
   @group(1) @binding(0) var baseSampler : sampler;
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
-
-  struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
-  }
 
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
@@ -321,9 +312,10 @@ export const MetaballFragmentSource = /*wgsl*/`
 `;
 
 // For visualizing the metaballs as a point cloud
-export const MetaballVertexPointSource = /*wgsl*/`
+export const MetaballRenderPointSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
+  ${ColorConversions}
 
   var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
     vec2f(-1, 1), vec2f(1, 1), vec2f(-1, -1), vec2f(1, -1)
@@ -367,19 +359,9 @@ export const MetaballVertexPointSource = /*wgsl*/`
     output.position = projection.matrix * bbModelViewMatrix * vec4f(pos[input.vertexIndex] * 0.005, 0, 1);
     return output;
   }
-`;
-
-export const MetaballFragmentPointSource = /*wgsl*/`
-  ${ColorConversions}
 
   @group(1) @binding(0) var baseSampler : sampler;
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
-
-  struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
-  }
 
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {

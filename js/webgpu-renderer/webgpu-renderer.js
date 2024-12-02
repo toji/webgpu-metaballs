@@ -25,8 +25,6 @@ import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
 
-//import { GPUStats } from './gpu-stats.js';
-
 import {
   MetaballWriteBuffer,
   MetaballNewBuffer,
@@ -49,26 +47,27 @@ const MetaballMethods = {
 };
 
 const SAMPLE_COUNT = 4;
-const DEPTH_FORMAT = "depth24plus";
+const DEPTH_FORMAT = 'depth24plus';
 
 export class WebGPURenderer extends Renderer {
   constructor() {
     super();
 
     this.sampleCount = SAMPLE_COUNT;
-    this.contextFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.contextFormat = navigator.gpu?.getPreferredCanvasFormat() ?? 'rgba8unorm';
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('webgpu');
 
-    //this.gpuStats = new GPUStats();
     this.metaballMethod = null;
   }
 
   async init() {
     this.adapter = await navigator.gpu.requestAdapter({
-      powerPreference: "high-performance",
+      powerPreference: 'high-performance',
     });
+
+    this.adapterInfo = this.adapter.adapterInfo;
 
     // Enable compressed textures if available
     const requiredFeatures = [];
@@ -112,6 +111,7 @@ export class WebGPURenderer extends Renderer {
       resolveTarget: undefined,
       loadOp: 'clear',
       storeOp: 'discard', // Discards the multisampled view, not the resolveTarget
+      clearValue: [0.1, 0.1, 0.3, 1.0]
     };
 
     this.depthAttachment = {
@@ -282,6 +282,10 @@ export class WebGPURenderer extends Renderer {
     this.timestampHelper = new TimestampHelper(this.device);
   }
 
+  get needComputeWorkaround() {
+    this.adapterInfo.architecture == 'adreno-6xx';
+  }
+
   onResize(width, height) {
     if (!this.device) return;
 
@@ -351,7 +355,7 @@ export class WebGPURenderer extends Renderer {
   }
 
   async updateMetaballs(timestamp) {
-    if (this.metaballsNeedUpdate && this.metaballRenderer) {
+    if (this.drawMetaballs && this.metaballsNeedUpdate && this.metaballRenderer) {
       this.metaballsNeedUpdate = false;
 
       super.updateMetaballs(timestamp);
