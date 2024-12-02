@@ -47,7 +47,7 @@ const MetaballMethods = {
   pointCloud: MetaballComputePointRenderer,
 };
 
-const SAMPLE_COUNT = 1;
+const SAMPLE_COUNT = 1; // TODO: Allow multisampling in WebXR
 const DEPTH_FORMAT = "depth24plus";
 
 const MAX_VIEW_COUNT = 2;
@@ -57,7 +57,7 @@ export class WebGPURenderer extends Renderer {
     super();
 
     this.sampleCount = SAMPLE_COUNT;
-    this.contextFormat = navigator.gpu.getPreferredCanvasFormat();
+    this.contextFormat = navigator.gpu?.getPreferredCanvasFormat() ?? 'rgba8unorm';
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('webgpu');
@@ -74,6 +74,8 @@ export class WebGPURenderer extends Renderer {
       powerPreference: "high-performance",
       xrCompatible: true,
     });
+
+    this.adapterInfo = this.adapter.adapterInfo;
 
     // Enable compressed textures if available
     const requiredFeatures = [];
@@ -259,6 +261,10 @@ export class WebGPURenderer extends Renderer {
     this.timestampHelper = new TimestampHelper(this.device);
   }
 
+  get needComputeWorkaround() {
+    this.adapterInfo.architecture == 'adreno-6xx';
+  }
+
   onResize(width, height) {
     if (!this.device) return;
 
@@ -329,7 +335,7 @@ export class WebGPURenderer extends Renderer {
   }
 
   async updateMetaballs(timestamp) {
-    if (this.metaballsNeedUpdate && this.metaballRenderer) {
+    if (this.drawMetaballs && this.metaballsNeedUpdate && this.metaballRenderer) {
       this.metaballsNeedUpdate = false;
 
       super.updateMetaballs(timestamp);

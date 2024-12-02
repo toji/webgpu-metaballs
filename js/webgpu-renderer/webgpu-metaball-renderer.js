@@ -15,13 +15,11 @@
 
 import { BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import {
-  MetaballVertexSource,
-  MetaballFragmentSource,
   MetaballFieldComputeSource,
   MarchingCubesComputeSource,
-  MetaballVertexPointSource,
-  MetaballFragmentPointSource,
-  WORKGROUP_SIZE
+  WORKGROUP_SIZE,
+  MetaballRenderSource,
+  MetaballRenderPointSource
 } from './shaders/metaball.js';
 import {
   MarchingCubesEdgeTable,
@@ -62,7 +60,9 @@ class WebGPUMetaballRendererBase {
       });
     }
 
-    this.pipeline = this.device.createRenderPipeline({
+    const module = this.device.createShaderModule({ code: MetaballRenderSource })
+
+    this.device.createRenderPipelineAsync({
       layout: this.device.createPipelineLayout({
         bindGroupLayouts: [
           this.renderer.bindGroupLayouts.frame,
@@ -70,8 +70,7 @@ class WebGPUMetaballRendererBase {
         ]
       }),
       vertex: {
-        module: this.device.createShaderModule({ code: MetaballVertexSource }),
-        entryPoint: "vertexMain",
+        module,
         buffers: [{
           arrayStride: 12,
           attributes: [{
@@ -89,8 +88,7 @@ class WebGPUMetaballRendererBase {
         }]
       },
       fragment: {
-        module: this.device.createShaderModule({ code: MetaballFragmentSource }),
-        entryPoint: "fragmentMain",
+        module,
         targets: [{
           format: this.renderer.contextFormat,
         }]
@@ -107,6 +105,8 @@ class WebGPUMetaballRendererBase {
       multisample: {
         count: this.renderer.renderBundleDescriptor.sampleCount
       }
+    }).then((pipeline) => {
+      this.pipeline = pipeline;
     });
   }
 
@@ -119,7 +119,7 @@ class WebGPUMetaballRendererBase {
   }
 
   draw(passEncoder, view) {
-    if (this.indexCount) {
+    if (this.indexCount && this.pipeline) {
       passEncoder.setPipeline(this.pipeline);
       passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
       passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
@@ -515,15 +515,6 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     tablesArray.set(MarchingCubesTriTable, MarchingCubesEdgeTable.length);
     this.tablesBuffer.unmap();
 
-    this.metaballBufferSize = (Uint32Array.BYTES_PER_ELEMENT * 4) + (Float32Array.BYTES_PER_ELEMENT * 8 * MAX_METABALLS);
-    this.metaballArray = new ArrayBuffer(this.metaballBufferSize);
-    this.metaballArrayHeader = new Uint32Array(this.metaballArray, 0, 4);
-    this.metaballArrayBalls = new Float32Array(this.metaballArray, 16);
-    this.metaballBuffer = this.device.createBuffer({
-      size: this.metaballBufferSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-    });
-
     this.volumeElements = volume.width * volume.height * volume.depth;
     this.volumeBufferSize = (Float32Array.BYTES_PER_ELEMENT * 12) +
                             (Uint32Array.BYTES_PER_ELEMENT * 4) +
@@ -560,33 +551,52 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     this.volumeBuffer.unmap();
 
-    // Mesh resources
+    this.metaballBufferSize = (Uint32Array.BYTES_PER_ELEMENT * 4) + (Float32Array.BYTES_PER_ELEMENT * 8 * MAX_METABALLS);
+    this.metaballArray = new ArrayBuffer(this.metaballBufferSize);
+    this.metaballArrayHeader = new Uint32Array(this.metaballArray, 0, 4);
+    this.metaballArrayBalls = new Float32Array(this.metaballArray, 16);
+
     this.marchingCubeCells = (volume.width-1) * (volume.height-1) * (volume.depth-1);
     this.vertexBufferSize = (Float32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
     this.indexBufferSize = Uint32Array.BYTES_PER_ELEMENT * 15 * this.marchingCubeCells;
 
-    this.vertexBuffer = this.device.createBuffer({
-      size: this.vertexBufferSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
-    });
-
-    this.normalBuffer = this.device.createBuffer({
-      size: this.vertexBufferSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
-    });
-
-    this.indexBuffer = this.device.createBuffer({
-      size: this.indexBufferSize,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
-    });
-
     this.indirectArray = new Uint32Array(9);
     this.indirectArray[0] = 4; // Number of verticies for point rendering
     this.indirectArray[5] = 1; // Number of instances for normal rendering
-    this.indirectBuffer = this.device.createBuffer({
-      size: this.indirectArray.byteLength,
-      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
-    });
+
+    const createMetaballResources = () => {
+      // Metaball GPU resources
+      const resources = {
+        metaballBuffer: this.device.createBuffer({
+          size: this.metaballBufferSize,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        }),
+
+        vertexBuffer: this.device.createBuffer({
+          size: this.vertexBufferSize,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
+        }),
+
+        normalBuffer: this.device.createBuffer({
+          size: this.vertexBufferSize,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
+        }),
+
+        indexBuffer: this.device.createBuffer({
+          size: this.indexBufferSize,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
+        }),
+
+        indirectBuffer: this.device.createBuffer({
+          size: this.indirectArray.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
+        }),
+      };
+
+      return resources;
+    }
+
+    this.resources = [createMetaballResources(), createMetaballResources()];
 
     // Create compute pipeline that handles the metaball isosurface.
     const metaballModule = this.device.createShaderModule({
@@ -600,20 +610,23 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       compute: { module: metaballModule, entryPoint: 'computeMain' }
     }).then((pipeline) => {
       this.metaballComputePipeline = pipeline;
-      this.metaballComputeBindGroup = this.device.createBindGroup({
-        layout: this.metaballComputePipeline.getBindGroupLayout(0),
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.metaballBuffer,
-          },
-        }, {
-          binding: 1,
-          resource: {
-            buffer: this.volumeBuffer,
-          },
-        }],
-      });
+
+      for (const resource of this.resources) {
+        resource.metaballComputeBindGroup = this.device.createBindGroup({
+          layout: this.metaballComputePipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: {
+              buffer: resource.metaballBuffer,
+            },
+          }, {
+            binding: 1,
+            resource: {
+              buffer: this.volumeBuffer,
+            },
+          }],
+        });
+      }
     });
 
     // Create compute pipeline that handles the marching cubes triangulation.
@@ -628,44 +641,51 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       compute: { module: marchingCubesModule, entryPoint: 'computeMain' }
     }).then((pipeline) => {;
       this.marchingCubesComputePipeline = pipeline;
-      this.marchingCubesComputeBindGroup = this.device.createBindGroup({
-        layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.tablesBuffer,
-          },
-        }, {
-          binding: 1,
-          resource: {
-            buffer: this.volumeBuffer,
-          },
-        }, {
-          binding: 2,
-          resource: {
-            buffer: this.vertexBuffer,
-          },
-        }, {
-          binding: 3,
-          resource: {
-            buffer: this.normalBuffer,
-          },
-        }, {
-          binding: 4,
-          resource: {
-            buffer: this.indexBuffer,
-          },
-        }, {
-          binding: 5,
-          resource: {
-            buffer: this.indirectBuffer,
-          },
-        }],
-      });
+
+      for (const resource of this.resources) {
+        resource.marchingCubesComputeBindGroup = this.device.createBindGroup({
+          layout: this.marchingCubesComputePipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: {
+              buffer: this.tablesBuffer,
+            },
+          }, {
+            binding: 1,
+            resource: {
+              buffer: this.volumeBuffer,
+            },
+          }, {
+            binding: 2,
+            resource: {
+              buffer: resource.vertexBuffer,
+            },
+          }, {
+            binding: 3,
+            resource: {
+              buffer: resource.normalBuffer,
+            },
+          }, {
+            binding: 4,
+            resource: {
+              buffer: resource.indexBuffer,
+            },
+          }, {
+            binding: 5,
+            resource: {
+              buffer: resource.indirectBuffer,
+            },
+          }],
+        });
+      }
     });
+
+    this.drawIndex = 0;
+    this.computeIndex = 0;
   }
 
   updateMetaballs(metaballs, marchingCubes) {
+    this.computeIndex = this.drawIndex;
     this.metaballArrayHeader[0] = metaballs.balls.length;
 
     for (let i = 0; i < metaballs.balls.length; ++i) {
@@ -680,18 +700,26 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     }
 
     // Update the metaball buffer with the latest metaball values.
-    this.device.queue.writeBuffer(this.metaballBuffer, 0, this.metaballArray);
-
-    // Zero out the indirect buffer every time.
-    this.device.queue.writeBuffer(this.indirectBuffer, 0, this.indirectArray);
+    this.device.queue.writeBuffer(this.resources[this.computeIndex].metaballBuffer, 0, this.metaballArray);
   }
 
   update(marchingCubes, timestampHelper) {
-    // Update the volume buffer with the latest isosurface values.
-    //this.device.queue.writeBuffer(this.volumeBuffer, 64, marchingCubes.volume.values, 0, this.volumeElements);
+    const resource = this.resources[this.computeIndex];
+    // Zero out the indirect buffer every time.
+    this.device.queue.writeBuffer(resource.indirectBuffer, 0, this.indirectArray);
 
     // Run the compute shader to fill the position/normal/index buffers.
     const commandEncoder = this.device.createCommandEncoder();
+
+    if (this.renderer.needsComputeWorkaround) {
+      // For the Pixel 4, something about the indirect draw is causing a crash
+      // so instead we'll use a regular indexed draw. This requires the indices
+      // to be cleared prior to rendering, though, to fill the excess buffer
+      // with degenerate triangles.
+      commandEncoder.clearBuffer(resource.indexBuffer);
+      this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
+    }
+
     const passEncoder = commandEncoder.beginComputePass({
       timestampWrites: timestampHelper.timestampWrites('Compute')
     });
@@ -704,37 +732,50 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
 
     if (this.metaballComputePipeline) {
       passEncoder.setPipeline(this.metaballComputePipeline);
-      passEncoder.setBindGroup(0, this.metaballComputeBindGroup);
+      passEncoder.setBindGroup(0, resource.metaballComputeBindGroup);
       passEncoder.dispatchWorkgroups(...dispatchSize);
     }
 
     if (this.marchingCubesComputePipeline) {
       passEncoder.setPipeline(this.marchingCubesComputePipeline);
-      passEncoder.setBindGroup(0, this.marchingCubesComputeBindGroup);
+      passEncoder.setBindGroup(0, resource.marchingCubesComputeBindGroup);
       passEncoder.dispatchWorkgroups(...dispatchSize);
     }
 
     passEncoder.end();
 
     this.device.queue.submit([commandEncoder.finish()]);
-
-    this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
   }
 
   draw(passEncoder, view) {
+    this.drawIndex = (this.drawIndex + 1) % this.resources.length;
+
+    // Pipeline may not be ready because it's created asynchronously.
+    if (!this.pipeline) { return; }
+
+    if (this.renderer.needsComputeWorkaround) {
+      // Do a regular indexed draw.
+      super.draw(passEncoder);
+      return;
+    }
+
+    const resource = this.resources[this.computeIndex];
+
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
     passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
-    passEncoder.setVertexBuffer(0, this.vertexBuffer);
-    passEncoder.setVertexBuffer(1, this.normalBuffer);
-    passEncoder.setIndexBuffer(this.indexBuffer, 'uint32');
-    passEncoder.drawIndexedIndirect(this.indirectBuffer, 16);
+    passEncoder.setVertexBuffer(0, resource.vertexBuffer);
+    passEncoder.setVertexBuffer(1, resource.normalBuffer);
+    passEncoder.setIndexBuffer(resource.indexBuffer, 'uint32');
+    passEncoder.drawIndexedIndirect(resource.indirectBuffer, 16);
   }
 }
 
 export class MetaballComputePointRenderer extends MetaballComputeRenderer {
   constructor(renderer, volume) {
     super(renderer, volume);
+
+    const module = this.device.createShaderModule({ code: MetaballRenderPointSource });
 
     this.pipeline = this.device.createRenderPipeline({
       layout: this.device.createPipelineLayout({
@@ -744,8 +785,7 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
         ]
       }),
       vertex: {
-        module: this.device.createShaderModule({ code: MetaballVertexPointSource }),
-        entryPoint: "vertexMain",
+        module,
         buffers: [{
           arrayStride: 12,
           stepMode: 'instance',
@@ -766,8 +806,7 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
         }]
       },
       fragment: {
-        module: this.device.createShaderModule({ code: MetaballFragmentPointSource }),
-        entryPoint: "fragmentMain",
+        module,
         targets: [{
           format: this.renderer.contextFormat,
         }]

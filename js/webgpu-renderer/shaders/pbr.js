@@ -209,15 +209,14 @@ fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   let L = normalize(light.pointToLight);
   let H = normalize(surface.v + L);
   let distance = length(light.pointToLight);
+  let NdotL = max(dot(surface.normal, L), 0.0);
 
   // cook-torrance brdf
-  let NDF = DistributionGGX(surface.normal, H, surface.roughness);
+  /*let NDF = DistributionGGX(surface.normal, H, surface.roughness);
   let G = GeometrySmith(surface.normal, surface.v, L, surface.roughness);
   let F = FresnelSchlick(max(dot(H, surface.v), 0.0), surface.f0);
 
   let kD = (vec3(1.0) - F) * (1.0 - surface.metallic);
-
-  let NdotL = max(dot(surface.normal, L), 0.0);
 
   let numerator = NDF * G * F;
   let denominator = max(4.0 * max(dot(surface.normal, surface.v), 0.0) * NdotL, 0.001);
@@ -226,7 +225,11 @@ fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   // add to outgoing radiance Lo
   let attenuation = rangeAttenuation(light.range, distance);
   let radiance = light.color * light.intensity * attenuation;
-  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
+  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;*/
+
+  let attenuation = rangeAttenuation(light.range, distance);
+  let radiance = light.color * light.intensity * attenuation;
+  return surface.albedo * radiance * NdotL;
 }
   
 fn lightRadianceSimple(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
