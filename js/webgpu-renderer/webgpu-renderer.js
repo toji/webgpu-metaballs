@@ -55,6 +55,7 @@ export class WebGPURenderer extends Renderer {
 
     this.sampleCount = SAMPLE_COUNT;
     this.contextFormat = navigator.gpu?.getPreferredCanvasFormat() ?? 'rgba8unorm';
+    this.renderFormat = this.contextFormat; //`${this.contextFormat}-srgb`;
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('webgpu');
@@ -93,11 +94,12 @@ export class WebGPURenderer extends Renderer {
     this.context.configure({
       device: this.device,
       format: this.contextFormat,
+      viewFormats: [this.renderFormat],
       alphaMode: 'opaque',
     });
 
     this.renderBundleDescriptor = {
-      colorFormats: [ this.contextFormat ],
+      colorFormats: [ this.renderFormat ],
       depthStencilFormat: DEPTH_FORMAT,
       sampleCount: SAMPLE_COUNT
     };
@@ -111,7 +113,7 @@ export class WebGPURenderer extends Renderer {
       resolveTarget: undefined,
       loadOp: 'clear',
       storeOp: 'discard', // Discards the multisampled view, not the resolveTarget
-      clearValue: [0.1, 0.1, 0.3, 1.0]
+      clearValue: [0.0, 0.0, 0.2, 1.0]
     };
 
     this.depthAttachment = {
@@ -212,7 +214,7 @@ export class WebGPURenderer extends Renderer {
       })
     };
 
-    this.bindGroupLayouts.frame.label = "frame-bgl-SUPER ULTRA COOL EDITION";
+    this.bindGroupLayouts.frame.label = "frame-bgl";
 
     this.pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [
@@ -294,7 +296,7 @@ export class WebGPURenderer extends Renderer {
     const msaaColorTexture = this.device.createTexture({
       size: { width, height },
       sampleCount: SAMPLE_COUNT,
-      format: this.contextFormat,
+      format: this.renderFormat,
       usage: GPUTextureUsage.RENDER_ATTACHMENT,
     });
     this.colorAttachment.view = msaaColorTexture.createView();
@@ -335,7 +337,12 @@ export class WebGPURenderer extends Renderer {
   async setMetaballStyle(style) {
     super.setMetaballStyle(style);
 
-    const metaballTexture = await this.textureLoader.fromUrl(this.metaballTexturePath, {colorSpace: 'sRGB'});
+    let metaballTexture;
+    if (this.metaballTexturePath) {
+      metaballTexture = await this.textureLoader.fromUrl(this.metaballTexturePath, {colorSpace: 'sRGB'});
+    } else {
+      metaballTexture = this.textureLoader.fromColor(0, 0, 0);
+    }
 
     this.bindGroups.metaball = this.device.createBindGroup({
       layout: this.bindGroupLayouts.metaball,
@@ -373,11 +380,8 @@ export class WebGPURenderer extends Renderer {
   }
 
   onFrame(timestamp) {
-    //this.gpuStats.begin();
-
-    // TODO: If we want multisampling this should attach to the resolveTarget,
-    // but there seems to be a bug with that right now?
-    this.colorAttachment.resolveTarget = this.context.getCurrentTexture().createView();
+    const currentTexture = this.context.getCurrentTexture();
+    this.colorAttachment.resolveTarget = currentTexture.createView({ format: this.renderFormat });
 
     // Update the View uniforms buffer with the values. These are used by most shader programs
     // and don't change for the duration of the frame.
@@ -420,7 +424,5 @@ export class WebGPURenderer extends Renderer {
         this.stats.addSample(key, result);
       }
     });
-
-    //this.gpuStats.end();
   }
 }

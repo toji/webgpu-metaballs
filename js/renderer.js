@@ -276,6 +276,7 @@ export class Renderer {
         break;
       case 'none':
         this.drawMetaballs = false;
+        this.metaballTexturePath = null;
         this.lightManager.lightCount = this.sceneLightCount;
         break;
     }
