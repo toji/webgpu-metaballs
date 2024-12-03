@@ -18,16 +18,13 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-import { vec3, mat4 } from 'gl-matrix';
-
 import { Renderer } from '../renderer.js';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
 import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
-
-//import { GPUStats } from './gpu-stats.js';
+import { WebGPUView } from './webgpu-view.js';
 
 import {
   MetaballWriteBuffer,
@@ -53,6 +50,8 @@ const MetaballMethods = {
 const SAMPLE_COUNT = 1;
 const DEPTH_FORMAT = "depth24plus";
 
+const MAX_VIEW_COUNT = 2;
+
 export class WebGPURenderer extends Renderer {
   constructor() {
     super();
@@ -63,7 +62,6 @@ export class WebGPURenderer extends Renderer {
 
     this.context = this.canvas.getContext('webgpu');
 
-    //this.gpuStats = new GPUStats();
     this.metaballMethod = null;
 
     this.xrBinding = null;
@@ -219,7 +217,7 @@ export class WebGPURenderer extends Renderer {
       })
     };
 
-    this.bindGroupLayouts.frame.label = "frame-bgl-SUPER ULTRA COOL EDITION";
+    this.bindGroupLayouts.frame.label = "frame-bgl";
 
     this.pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [
@@ -229,16 +227,6 @@ export class WebGPURenderer extends Renderer {
       ]
     });
 
-    this.projectionBuffer = this.device.createBuffer({
-      size: ProjectionUniformsSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    });
-
-    this.viewBuffer = this.device.createBuffer({
-      size: ViewUniformsSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    });
-
     this.lightsBuffer = this.device.createBuffer({
       size: this.lightManager.uniformArray.byteLength,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
@@ -246,31 +234,13 @@ export class WebGPURenderer extends Renderer {
 
     this.clusteredLights = new ClusteredLightManager(this);
 
+    this.views = [];
+    for (let i = 0; i < MAX_VIEW_COUNT; ++i) {
+      this.views.push(new WebGPUView(this));
+    }
+
     this.bindGroups = {
-      frame: this.device.createBindGroup({
-        layout: this.bindGroupLayouts.frame,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.projectionBuffer,
-          },
-        }, {
-          binding: 1,
-          resource: {
-            buffer: this.viewBuffer,
-          },
-        }, {
-          binding: 2,
-          resource: {
-            buffer: this.lightsBuffer,
-          },
-        }, {
-          binding: 3,
-          resource: {
-            buffer: this.clusteredLights.clusterLightsBuffer,
-          }
-        }],
-      })
+      frame: this.views[0].bindGroup
     }
 
     this.defaultSampler = this.device.createSampler({
@@ -312,8 +282,7 @@ export class WebGPURenderer extends Renderer {
     });
     this.depthAttachment.view = depthTexture.createView();
 
-    // Update the Projection uniforms. These only need to be updated on resize.
-    this.device.queue.writeBuffer(this.projectionBuffer, 0, this.frameUniforms.buffer, 0, ProjectionUniformsSize);
+    this.views[0].updateMatrices(this.camera);
 
     // On every size change we need to re-compute the cluster grid.
     this.clusteredLights.updateClusterBounds();
@@ -386,9 +355,8 @@ export class WebGPURenderer extends Renderer {
       this.colorAttachment.view = this.context.getCurrentTexture().createView();
     }
 
-    // Update the View uniforms buffer with the values. These are used by most shader programs
-    // and don't change for the duration of the frame.
-    this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
+    // Copy values from the camera into our frame uniform buffers
+    this.views[0].updateMatrices(this.camera);
 
     // Update the light unform buffer with the latest values as well.
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
@@ -401,18 +369,18 @@ export class WebGPURenderer extends Renderer {
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
     if (this.scene && this.renderEnvironment) {
-      this.scene.draw(passEncoder);
+      this.scene.draw(passEncoder, this.views[0]);
     }
 
     if (this.drawMetaballs && this.metaballRenderer && this.bindGroups.metaball) {
       // Draw metaballs.
-      this.metaballRenderer.draw(passEncoder);
+      this.metaballRenderer.draw(passEncoder, this.views[0]);
     }
 
     if (this.lightManager.render) {
       // Last, render a sprite for all of the lights. This is done using instancing so it's a single
       // call for every light.
-      this.lightSprites.draw(passEncoder);
+      this.lightSprites.draw(passEncoder, this.views[0]);
     }
 
     passEncoder.end();
@@ -440,14 +408,10 @@ export class WebGPURenderer extends Renderer {
 
     this.xrSession.updateRenderState({ layers: [this.xrLayer] });
 
-    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local');
+    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
   }
 
   onXRFrame(timestamp, timeDelta, xrFrame) {
-    // Update the View uniforms buffer with the values. These are used by most shader programs
-    // and don't change for the duration of the frame.
-    //this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
-
     // Update the light unform buffer with the latest values as well.
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
 
@@ -460,12 +424,7 @@ export class WebGPURenderer extends Renderer {
       for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
         const view = pose.views[viewIndex];
 
-        // THIS DOESN'T WORK FOR MULTIPLE VIEWS!
-        mat4.copy(this.projectionMatrix, view.projectionMatrix);
-        mat4.invert(this.inverseProjectionMatrix, this.projectionMatrix);
-        mat4.copy(this.viewMatrix, view.transform.inverse.matrix);
-        vec3.copy(this.cameraPosition, [view.transform.position.x, view.transform.position.y, view.transform.position.z]);
-        this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
+        this.views[viewIndex].updateMatricesForXR(view);
 
         let subImage = this.xrBinding.getViewSubImage(this.xrLayer, view);
 
@@ -489,18 +448,18 @@ export class WebGPURenderer extends Renderer {
         renderPass.setViewport(vp.x, vp.y, vp.width, vp.height, 0.0, 1.0);
 
         if (this.scene && this.renderEnvironment) {
-          this.scene.draw(renderPass);
+          this.scene.draw(renderPass, this.views[viewIndex]);
         }
     
         if (this.drawMetaballs && this.metaballRenderer && this.bindGroups.metaball) {
           // Draw metaballs.
-          this.metaballRenderer.draw(renderPass);
+          this.metaballRenderer.draw(renderPass, this.views[viewIndex]);
         }
     
         if (this.lightManager.render) {
           // Last, render a sprite for all of the lights. This is done using instancing so it's a single
           // call for every light.
-          this.lightSprites.draw(renderPass);
+          this.lightSprites.draw(renderPass, this.views[viewIndex]);
         }
 
         renderPass.end();

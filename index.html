@@ -75,7 +75,7 @@
         scene: './media/models/dungeon/dungeon.glb',
         metaballMethod: 'gpuGenerated',
         renderLightSprites: true,
-        renderEnvironment: false,
+        renderEnvironment: true,
         environmentLights: true,
         metaballLights: true,
         metaballStyle: 'lava',
@@ -159,7 +159,7 @@
         }
 
         xrSession = await navigator.xr.requestSession('immersive-vr', {
-          requiredFeatures: ['webgpu'],
+          requiredFeatures: ['webgpu', 'local-floor'],
         });
         console.log('Got a WebXR Session!');
         renderer.setWebXRSession(xrSession);
