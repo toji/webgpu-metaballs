@@ -179,7 +179,7 @@ export class Renderer {
       if (this.frameCount % 200 == 0) { return; }
 
       if (this.stats) {
-        this.stats.begin();
+        this.stats.beginFrame();
       }
 
       this.beforeFrame(timestamp, timeDelta);
@@ -187,7 +187,7 @@ export class Renderer {
       this.onXRFrame(timestamp, timeDelta, xrFrame);
 
       if (this.stats) {
-        this.stats.end();
+        this.stats.endFrame();
       }
     };
 

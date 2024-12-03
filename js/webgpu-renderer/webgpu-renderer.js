@@ -378,8 +378,6 @@ export class WebGPURenderer extends Renderer {
   }
 
   onFrame(timestamp, timeDelta) {
-    //this.gpuStats.begin();
-
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
     if (SAMPLE_COUNT > 1) {
@@ -429,8 +427,6 @@ export class WebGPURenderer extends Renderer {
         this.stats.addSample(key, result);
       }
     });
-
-    //this.gpuStats.end();
   }
 
   async onXRStarted() {
@@ -485,7 +481,8 @@ export class WebGPURenderer extends Renderer {
               depthLoadOp: 'clear',
               depthStoreOp: 'store',
               depthClearValue: 1.0,
-            }
+            },
+            timestampWrites: this.timestampHelper.timestampWrites(`View ${viewIndex}`)
           });
 
         let vp = subImage.viewport;
@@ -510,7 +507,15 @@ export class WebGPURenderer extends Renderer {
       }
     }
 
+    this.timestampHelper.resolve(commandEncoder);
+
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
+
+    this.timestampHelper.read().then((results) => {
+      for (let [key, result] of Object.entries(results)) {
+        this.stats.addSample(key, result);
+      }
+    });
   }
 }
