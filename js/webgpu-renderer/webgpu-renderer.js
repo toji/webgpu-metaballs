@@ -58,6 +58,7 @@ export class WebGPURenderer extends Renderer {
 
     this.sampleCount = SAMPLE_COUNT;
     this.contextFormat = navigator.gpu?.getPreferredCanvasFormat() ?? 'rgba8unorm';
+    this.renderFormat = this.contextFormat; //`${this.contextFormat}-srgb`;
     this.depthFormat = DEPTH_FORMAT;
 
     this.context = this.canvas.getContext('webgpu');
@@ -101,11 +102,12 @@ export class WebGPURenderer extends Renderer {
     this.context.configure({
       device: this.device,
       format: this.contextFormat,
+      viewFormats: [this.renderFormat],
       alphaMode: 'opaque',
     });
 
     this.renderBundleDescriptor = {
-      colorFormats: [ this.contextFormat ],
+      colorFormats: [ this.renderFormat ],
       depthStencilFormat: DEPTH_FORMAT,
       sampleCount: SAMPLE_COUNT
     };
@@ -119,6 +121,7 @@ export class WebGPURenderer extends Renderer {
       resolveTarget: undefined,
       loadOp: 'clear',
       storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
+      clearValue: [0.0, 0.0, 0.2, 1.0]
     };
 
     this.depthAttachment = {
@@ -274,7 +277,7 @@ export class WebGPURenderer extends Renderer {
       const msaaColorTexture = this.device.createTexture({
         size: { width, height },
         sampleCount: SAMPLE_COUNT,
-        format: this.contextFormat,
+        format: this.renderFormat,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
       this.colorAttachment.view = msaaColorTexture.createView();
@@ -315,7 +318,12 @@ export class WebGPURenderer extends Renderer {
   async setMetaballStyle(style) {
     super.setMetaballStyle(style);
 
-    const metaballTexture = await this.textureLoader.fromUrl(this.metaballTexturePath, {colorSpace: 'sRGB'});
+    let metaballTexture;
+    if (this.metaballTexturePath) {
+      metaballTexture = await this.textureLoader.fromUrl(this.metaballTexturePath, {colorSpace: 'sRGB'});
+    } else {
+      metaballTexture = this.textureLoader.fromColor(0, 0, 0);
+    }
 
     this.bindGroups.metaball = this.device.createBindGroup({
       layout: this.bindGroupLayouts.metaball,
@@ -353,12 +361,14 @@ export class WebGPURenderer extends Renderer {
   }
 
   onFrame(timestamp, timeDelta) {
+    const currentTexture = this.context.getCurrentTexture();
+    const currentView = currentTexture.createView({ format: this.renderFormat });
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
     if (SAMPLE_COUNT > 1) {
-      this.colorAttachment.resolveTarget = this.context.getCurrentTexture().createView();
+      this.colorAttachment.resolveTarget = currentView;
     } else {
-      this.colorAttachment.view = this.context.getCurrentTexture().createView();
+      this.colorAttachment.view = currentView;
     }
 
     // Copy values from the camera into our frame uniform buffers

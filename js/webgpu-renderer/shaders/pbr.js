@@ -98,6 +98,8 @@ function PBRSurfaceInfo(defines) { return wgsl`
     v : vec3f,
   };
 
+  const MIN_ROUGHNESS = 0.045;
+
   fn GetSurfaceInfo(input : VertexOutput) -> SurfaceInfo {
     var surface : SurfaceInfo;
     surface.v = normalize(input.view);
@@ -118,6 +120,8 @@ function PBRSurfaceInfo(defines) { return wgsl`
     surface.metallic = surface.metallic * metallicRoughness.b;
     surface.roughness = surface.roughness * metallicRoughness.g;
 #endif
+
+    surface.roughness = clamp(surface.roughness, MIN_ROUGHNESS, 1.0);
 
 #if ${defines.USE_NORMAL_MAP}
     let tbn = mat3x3(input.tangent, input.bitangent, input.normal);
@@ -205,33 +209,47 @@ fn rangeAttenuation(range : f32, distance : f32) -> f32 {
   return clamp(1.0 - pow(distance / range, 4.0), 0.0, 1.0) / pow(distance, 2.0);
 }
 
+fn lightAttenuation(light : PuctualLight) -> f32 {
+  if (light.lightType == LightType_Directional) {
+    return 1.0;
+  }
+
+  let distance = length(light.pointToLight);
+  if (light.range <= 0.0) {
+      // Negative range means no cutoff
+      return 1.0 / pow(distance, 2.0);
+  }
+  return clamp(1.0 - pow(distance / light.range, 4.0), 0.0, 1.0) / pow(distance, 2.0);
+}
+
 fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   let L = normalize(light.pointToLight);
-  let H = normalize(surface.v + L);
-  let distance = length(light.pointToLight);
   let NdotL = max(dot(surface.normal, L), 0.0);
 
-  // cook-torrance brdf
-  /*let NDF = DistributionGGX(surface.normal, H, surface.roughness);
-  let G = GeometrySmith(surface.normal, surface.v, L, surface.roughness);
-  let F = FresnelSchlick(max(dot(H, surface.v), 0.0), surface.f0);
+  let radiance = light.color * light.intensity * lightAttenuation(light);
 
-  let kD = (vec3(1.0) - F) * (1.0 - surface.metallic);
+  if (surface.roughness < 0.9) {
+    // cook-torrance brdf
+    let H = normalize(surface.v + L);
+    let NDF = DistributionGGX(surface.normal, H, surface.roughness);
+    let G = GeometrySmith(surface.normal, surface.v, L, surface.roughness);
+    let F = FresnelSchlick(max(dot(H, surface.v), 0.0), surface.f0);
 
-  let numerator = NDF * G * F;
-  let denominator = max(4.0 * max(dot(surface.normal, surface.v), 0.0) * NdotL, 0.001);
-  let specular = numerator / vec3(denominator);
+    let numerator = NDF * G * F;
+    let denominator = max(4.0 * max(dot(surface.normal, surface.v), 0.0) * NdotL, 0.001);
 
-  // add to outgoing radiance Lo
-  let attenuation = rangeAttenuation(light.range, distance);
-  let radiance = light.color * light.intensity * attenuation;
-  return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;*/
+    let kD = (vec3(1.0) - F) * (1.0 - surface.metallic);
+    let specular = numerator / vec3(denominator);
 
-  let attenuation = rangeAttenuation(light.range, distance);
-  let radiance = light.color * light.intensity * attenuation;
-  return surface.albedo * radiance * NdotL;
+    // add to outgoing radiance Lo
+    return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
+  } else {
+    // For completely rough surfaces (or near to it) use a significantly simplified model.
+    // TODO: Definitely not energy preserving
+    return (surface.albedo / vec3(PI)) * radiance * NdotL;
+  }
 }
-  
+
 fn lightRadianceSimple(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   let L = normalize(light.pointToLight);
   let distance = length(light.pointToLight);

@@ -90,7 +90,7 @@ class WebGPUMetaballRendererBase {
       fragment: {
         module,
         targets: [{
-          format: this.renderer.contextFormat,
+          format: this.renderer.renderFormat,
         }]
       },
       primitive: {
@@ -808,7 +808,7 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
       fragment: {
         module,
         targets: [{
-          format: this.renderer.contextFormat,
+          format: this.renderer.renderFormat,
         }]
       },
       primitive: {
