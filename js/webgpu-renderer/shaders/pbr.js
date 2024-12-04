@@ -260,7 +260,7 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
     }
 
     // reflectance equation
-    /*var Lo = vec3(0.0);
+    var Lo = vec3(0.0);
 
     let clusterIndex = getClusterIndex(input.position);
     let lightOffset  = clusterLights.lights[clusterIndex].offset;
@@ -277,12 +277,12 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
       light.intensity = globalLights.lights[i].intensity;
 
       // calculate per-light radiance and add to outgoing radiance Lo
-      //Lo = Lo + lightRadiance(light, surface);
-      Lo = Lo + lightRadianceSimple(light, surface);
-    }*/
+      Lo = Lo + lightRadiance(light, surface);
+      //Lo = Lo + lightRadianceSimple(light, surface);
+    }
 
     let ambient = globalLights.ambient * surface.albedo * surface.ao;
-    let color = linearTosRGB(surface.albedo + ambient + surface.emissive);
+    let color = linearTosRGB(Lo + ambient + surface.emissive);
     return vec4(color, surface.baseColor.a);
   }`;
 };
