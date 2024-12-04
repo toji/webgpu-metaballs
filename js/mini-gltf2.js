@@ -351,7 +351,7 @@ export class Gltf2Loader {
           gltf.lights.push(new Light(
             light.type,
             light.color,
-            light.intensity, //(light.intensity) / (4 * Math.PI),
+            (light.intensity) / (4 * Math.PI),
             light.range
           ));
         }
