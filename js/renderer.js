@@ -80,10 +80,8 @@ class Light {
   }
 }
 
-class LightManager extends EventTarget {
+class LightManager {
   constructor(lightCount) {
-    super();
-
     this.maxLightCount = lightCount;
 
     this.uniformArray = new Float32Array(4 + Light.floatSize * lightCount);

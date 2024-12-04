@@ -100,8 +100,7 @@ function PBRSurfaceInfo(defines) { return wgsl`
 
   const MIN_ROUGHNESS = 0.045;
 
-  fn GetSurfaceInfo(input : VertexOutput) -> SurfaceInfo {
-    var surface : SurfaceInfo;
+  fn GetSurfaceInfo(input: VertexOutput, surface: ptr<function, SurfaceInfo>) {
     surface.v = normalize(input.view);
 
     surface.baseColor = material.baseColorFactor * input.color;
@@ -144,8 +143,6 @@ function PBRSurfaceInfo(defines) { return wgsl`
 #if ${defines.USE_EMISSIVE_TEXTURE}
     surface.emissive = surface.emissive * textureSample(emissiveTexture, defaultSampler, input.texCoord).rgb;
 #endif
-
-    return surface;
   }
 `; }
 
@@ -154,23 +151,18 @@ function PBRSurfaceInfo(defines) { return wgsl`
 const PBRFunctions = /*wgsl*/`
 const PI = ${Math.PI};
 
-const LightType_Point = 0u;
-const LightType_Spot = 1u;
-const LightType_Directional = 2u;
-
 struct PuctualLight {
-  lightType : u32,
   pointToLight : vec3f,
   range : f32,
   color : vec3f,
   intensity : f32,
 }
 
-fn FresnelSchlick(cosTheta : f32, F0 : vec3f) -> vec3f {
+fn FresnelSchlick(cosTheta: f32, F0: vec3f) -> vec3f {
   return F0 + (vec3(1.0) - F0) * pow(1.0 - cosTheta, 5.0);
 }
 
-fn DistributionGGX(N : vec3f, H : vec3f, roughness : f32) -> f32 {
+fn DistributionGGX(N: vec3f, H: vec3f, roughness: f32) -> f32 {
   let a      = roughness*roughness;
   let a2     = a*a;
   let NdotH  = max(dot(N, H), 0.0);
@@ -182,7 +174,7 @@ fn DistributionGGX(N : vec3f, H : vec3f, roughness : f32) -> f32 {
   return num / (PI * denom * denom);
 }
 
-fn GeometrySchlickGGX(NdotV : f32, roughness : f32) -> f32 {
+fn GeometrySchlickGGX(NdotV: f32, roughness: f32) -> f32 {
   let r = (roughness + 1.0);
   let k = (r*r) / 8.0;
 
@@ -192,7 +184,7 @@ fn GeometrySchlickGGX(NdotV : f32, roughness : f32) -> f32 {
   return num / denom;
 }
 
-fn GeometrySmith(N : vec3f, V : vec3f, L : vec3f, roughness : f32) -> f32 {
+fn GeometrySmith(N: vec3f, V: vec3f, L: vec3f, roughness: f32) -> f32 {
   let NdotV = max(dot(N, V), 0.0);
   let NdotL = max(dot(N, L), 0.0);
   let ggx2  = GeometrySchlickGGX(NdotV, roughness);
@@ -201,28 +193,19 @@ fn GeometrySmith(N : vec3f, V : vec3f, L : vec3f, roughness : f32) -> f32 {
   return ggx1 * ggx2;
 }
 
-fn rangeAttenuation(range : f32, distance : f32) -> f32 {
-  if (range <= 0.0) {
-      // Negative range means no cutoff
-      return 1.0 / pow(distance, 2.0);
-  }
-  return clamp(1.0 - pow(distance / range, 4.0), 0.0, 1.0) / pow(distance, 2.0);
-}
-
-fn lightAttenuation(light : PuctualLight) -> f32 {
-  if (light.lightType == LightType_Directional) {
-    return 1.0;
-  }
-
+// From https://lisyarus.github.io/blog/posts/point-light-attenuation.html
+const falloff = 4;
+fn lightAttenuation(light: ptr<function, PuctualLight>) -> f32 {
   let distance = length(light.pointToLight);
-  if (light.range <= 0.0) {
-      // Negative range means no cutoff
-      return 1.0 / pow(distance, 2.0);
-  }
-  return clamp(1.0 - pow(distance / light.range, 4.0), 0.0, 1.0) / pow(distance, 2.0);
+  let s = distance / light.range;
+  if (s >= 1) { return 0; }
+
+  let s2 = s * s;
+  let os2 = 1 - s2;
+  return (os2 * os2) / (1 + falloff * s);
 }
 
-fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
+fn lightRadiance(light: ptr<function, PuctualLight>, surface: ptr<function, SurfaceInfo>) -> vec3f {
   let L = normalize(light.pointToLight);
   let NdotL = max(dot(surface.normal, L), 0.0);
 
@@ -250,14 +233,12 @@ fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   }
 }
 
-fn lightRadianceSimple(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
+fn lightRadianceSimple(light: ptr<function, PuctualLight>, surface: ptr<function, SurfaceInfo>) -> vec3f {
   let L = normalize(light.pointToLight);
-  let distance = length(light.pointToLight);
-
   let NdotL = max(dot(surface.normal, L), 0.0);
 
   // add to outgoing radiance Lo
-  let attenuation = rangeAttenuation(light.range, distance);
+  let attenuation = lightAttenuation(light);
   let radiance = light.color * light.intensity * attenuation;
   return (surface.albedo / vec3(PI)) * radiance * NdotL;
 }`;
@@ -275,10 +256,8 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
 
   @fragment
   fn main(input : VertexOutput) -> @location(0) vec4f {
-    let surface = GetSurfaceInfo(input);
-    if (surface.baseColor.a < 0.05) {
-      discard;
-    }
+    var surface: SurfaceInfo;
+    GetSurfaceInfo(input, &surface);
 
     // reflectance equation
     var Lo = vec3(0.0);
@@ -290,16 +269,15 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
     for (var lightIndex = 0u; lightIndex < lightCount; lightIndex = lightIndex + 1u) {
       let i = clusterLights.indices[lightOffset + lightIndex];
 
-      var light : PuctualLight;
-      light.lightType = LightType_Point;
+      var light: PuctualLight;
       light.pointToLight = globalLights.lights[i].position.xyz - input.worldPos;
       light.range = globalLights.lights[i].range;
       light.color = globalLights.lights[i].color;
       light.intensity = globalLights.lights[i].intensity;
 
       // calculate per-light radiance and add to outgoing radiance Lo
-      Lo = Lo + lightRadiance(light, surface);
-      //Lo = Lo + lightRadianceSimple(light, surface);
+      Lo = Lo + lightRadiance(&light, &surface);
+      //Lo = Lo + lightRadianceSimple(&light, &surface);
     }
 
     let ambient = globalLights.ambient * surface.albedo * surface.ao;

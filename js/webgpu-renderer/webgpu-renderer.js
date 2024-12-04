@@ -19,9 +19,8 @@
 // SOFTWARE.
 
 import { Renderer } from '../renderer.js';
-import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
 import { WebGPUTextureLoader } from 'webgpu-texture-loader';
-import { ClusteredLightManager } from './clustered-lights.js';
+
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
 import { WebGPUView } from './webgpu-view.js';
@@ -237,8 +236,6 @@ export class WebGPURenderer extends Renderer {
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
     });
 
-    this.clusteredLights = new ClusteredLightManager(this);
-
     this.views = [];
     for (let i = 0; i < MAX_VIEW_COUNT; ++i) {
       this.views.push(new WebGPUView(this));
@@ -291,10 +288,11 @@ export class WebGPURenderer extends Renderer {
     });
     this.depthAttachment.view = depthTexture.createView();
 
-    this.views[0].updateMatrices(this.camera);
-
-    // On every size change we need to re-compute the cluster grid.
-    this.clusteredLights.updateClusterBounds();
+    if (!this.xrSession) {
+      this.views[0].updateMatrices(this.camera);
+      // On every size change we need to re-compute the cluster grid.
+      this.views[0].clusteredLights.updateClusterBounds();
+    }
   }
 
   async setScene(gltf) {
@@ -378,7 +376,7 @@ export class WebGPURenderer extends Renderer {
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
 
     const commandEncoder = this.device.createCommandEncoder({});
-    this.clusteredLights.updateClusterLights(commandEncoder);
+    this.views[0].clusteredLights.updateClusterLights(commandEncoder);
 
     this.renderPassDescriptor.timestampWrites = this.timestampHelper.timestampWrites('Rendering');
 
@@ -436,7 +434,6 @@ export class WebGPURenderer extends Renderer {
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
 
     const commandEncoder = this.device.createCommandEncoder({});
-    this.clusteredLights.updateClusterLights(commandEncoder);
 
     let pose = xrFrame.getViewerPose(this.xrRefSpace);
 
@@ -445,6 +442,8 @@ export class WebGPURenderer extends Renderer {
         const view = pose.views[viewIndex];
 
         this.views[viewIndex].updateMatricesForXR(view);
+        this.views[viewIndex].clusteredLights.updateClusterBounds(commandEncoder);
+        this.views[viewIndex].clusteredLights.updateClusterLights(commandEncoder);
 
         let subImage = this.xrBinding.getViewSubImage(this.xrLayer, view);
 

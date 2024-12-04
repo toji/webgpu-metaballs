@@ -1,5 +1,6 @@
 import { vec3, mat4 } from 'gl-matrix';
 import { ProjectionUniformsSize, ViewUniformsSize, BIND_GROUP, ATTRIB_MAP } from './shaders/common.js';
+import { ClusteredLightManager } from './clustered-lights.js';
 
 // Manages all the information needed to render a single view of the scene.
 export class WebGPUView {
@@ -32,6 +33,8 @@ export class WebGPUView {
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
     });
 
+    this.clusteredLights = new ClusteredLightManager(renderer, this);
+
     this.bindGroup = renderer.device.createBindGroup({
       layout: renderer.bindGroupLayouts.frame,
       entries: [{
@@ -52,7 +55,7 @@ export class WebGPUView {
       }, {
         binding: 3,
         resource: {
-          buffer: renderer.clusteredLights.clusterLightsBuffer,
+          buffer: this.clusteredLights.clusterLightsBuffer,
         }
       }],
     });

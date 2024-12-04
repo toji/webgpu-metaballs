@@ -62,7 +62,8 @@ class WebGPUMetaballRendererBase {
 
     const module = this.device.createShaderModule({ code: MetaballRenderSource })
 
-    this.device.createRenderPipelineAsync({
+    // TODO: It seems like there's a failure on Pixel 4 when this is async?
+    this.pipeline = this.device.createRenderPipeline({
       layout: this.device.createPipelineLayout({
         bindGroupLayouts: [
           this.renderer.bindGroupLayouts.frame,
@@ -105,8 +106,6 @@ class WebGPUMetaballRendererBase {
       multisample: {
         count: this.renderer.renderBundleDescriptor.sampleCount
       }
-    }).then((pipeline) => {
-      this.pipeline = pipeline;
     });
   }
 
