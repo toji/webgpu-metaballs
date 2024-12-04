@@ -730,8 +730,6 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     passEncoder.setIndexBuffer(this.indexBuffer, 'uint32');
     passEncoder.drawIndexedIndirect(this.indirectBuffer, 16);
   }
-
-  // TODO: DrawIndirect once the buffers are dynamically packed.
 }
 
 export class MetaballComputePointRenderer extends MetaballComputeRenderer {

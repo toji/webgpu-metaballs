@@ -408,7 +408,11 @@ export class WebGPURenderer extends Renderer {
 
     this.xrSession.updateRenderState({ layers: [this.xrLayer] });
 
-    this.xrRefSpace = await this.xrSession.requestReferenceSpace('local-floor');
+    const localFloorSpace = await this.xrSession.requestReferenceSpace('local-floor');
+
+    // Scoot our reference space origin back a bit so that we don't start inside the metaballs.
+    const offset = new XRRigidTransform({z: -1.8});
+    this.xrRefSpace = localFloorSpace.getOffsetReferenceSpace(offset);
   }
 
   onXRFrame(timestamp, timeDelta, xrFrame) {
