@@ -47,13 +47,11 @@
         "imports": {
             "gl-matrix": "./node_modules/gl-matrix/esm/index.js",
             "webgpu-texture-loader": "./node_modules/web-texture-tool/build/webgpu-texture-loader.js",
-            "wgsl-preprocessor": "./node_modules/wgsl-preprocessor/wgsl-preprocessor.js",
-            "dat.gui": "./node_modules/dat.gui/build/dat.gui.module.js"
+            "wgsl-preprocessor": "./node_modules/wgsl-preprocessor/wgsl-preprocessor.js"
         }
     }
     </script>
     <script type="module">
-      import dat from 'dat.gui';
       import { Pane } from 'https://cdn.jsdelivr.net/npm/tweakpane@4.0.1/dist/tweakpane.min.js';
 
       import { Gltf2Loader } from './js/mini-gltf2.js';
@@ -64,6 +62,8 @@
 
       let renderer = null;
       let gltf = null;
+      let xrSession = null;
+      let xrButton = null;
 
       const camera = new OrbitCamera();
       camera.target = [0, 1, 0];
@@ -152,6 +152,41 @@
         }
       });
 
+      async function toggleWebXR() {
+        if (xrSession) {
+          xrSession.end();
+          return;
+        }
+
+        xrSession = await navigator.xr.requestSession('immersive-vr', {
+          requiredFeatures: ['webgpu', 'local-floor'],
+        });
+        console.log('Got a WebXR Session!');
+        renderer.setWebXRSession(xrSession);
+        xrButton.title = 'Exit VR';
+
+        xrSession.addEventListener('end', () => {
+          renderer.setWebXRSession(null);
+          xrSession = null;
+          xrButton.title = 'Enter VR';
+        });
+      }
+
+      async function enableWebXRButton() {
+        if (!('XRGPUBinding' in window)) {
+          console.log('WebGPU/WebXR bindings not supported.');
+          return;
+        }
+        const supported = await navigator.xr.isSessionSupported('immersive-vr');
+        if (!supported) {
+          console.log('immersive-vr sessions not supported.');
+          return;
+        }
+
+        xrButton = pane.addButton({ title: 'Enter VR' });
+        xrButton.on('click', toggleWebXR);
+      }
+
       async function init() {
         renderer = new WebGPURenderer();
 
@@ -172,6 +207,7 @@
           renderer.setMetaballStyle(appSettings.metaballStyle);
           renderer.setMetaballMethod(appSettings.metaballMethod);
 
+          enableWebXRButton();
 
           renderer.start();
 

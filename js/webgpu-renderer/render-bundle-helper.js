@@ -125,11 +125,7 @@ export class RenderBundleHelper {
     return this.pipelineCache.getRenderPipeline(pipelineDescriptor);
   }
 
-  setFrameBindGroups(renderBundleEncoder) {
-    renderBundleEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
-  }
-
-  createRenderBundle(primitives) {
+  createRenderBundle(primitives, view) {
     // Generate a render bundle that draws all the given primitives with the specified technique.
     // The sort up front is a bit heavy, but that's OK because the end result is a render bundle
     // will excute very quickly.
@@ -166,7 +162,7 @@ export class RenderBundleHelper {
     // Create a bundle we can use to replay our scene drawing each frame
     const renderBundleEncoder = this.device.createRenderBundleEncoder(this.renderBundleDescriptor);
 
-    this.setFrameBindGroups(renderBundleEncoder);
+    renderBundleEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
 
     // Opaque primitives first
     for (let pipeline of opaquePipelines.values()) {

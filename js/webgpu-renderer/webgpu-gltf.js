@@ -35,8 +35,8 @@ export class WebGPUglTF {
     this.blackTextureView = renderer.textureLoader.fromColor(0, 0, 0, 0).texture.createView();
     this.whiteTextureView = renderer.textureLoader.fromColor(1.0, 1.0, 1.0, 1.0).texture.createView();
     this.blueTextureView = renderer.textureLoader.fromColor(0, 0, 1.0, 0).texture.createView();
-    
-    this.renderBundle = null;
+
+    this.renderBundles = new WeakMap();
 
     this._initGLTF(gltf);
   }
@@ -70,8 +70,7 @@ export class WebGPUglTF {
 
     this.primitives = gltf.primitives;
 
-    const renderBundleHelper = new PBRRenderBundleHelper(this.renderer);
-    this.renderBundle = renderBundleHelper.createRenderBundle(this.primitives);
+    this.renderBundleHelper = new PBRRenderBundleHelper(this.renderer);
   }
 
   async initBufferView(bufferView) {
@@ -213,9 +212,14 @@ export class WebGPUglTF {
     }
   }
 
-  draw(passEncoder) {
-    if (this.renderBundle) {
-      passEncoder.executeBundles([this.renderBundle]);
+  draw(passEncoder, view) {
+    let renderBundle = this.renderBundles.get(view);
+    if (!renderBundle && this.renderBundleHelper) {
+      renderBundle = this.renderBundleHelper.createRenderBundle(this.primitives, view);
+      this.renderBundles.set(view, renderBundle);
+    }
+    if (renderBundle) {
+      passEncoder.executeBundles([renderBundle]);
     }
   }
 }

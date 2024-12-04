@@ -24,8 +24,7 @@ import { WebGPUTextureLoader } from 'webgpu-texture-loader';
 import { ClusteredLightManager } from './clustered-lights.js';
 import { WebGPULightSprites } from './webgpu-light-sprites.js';
 import { WebGPUglTF } from './webgpu-gltf.js';
-
-//import { GPUStats } from './gpu-stats.js';
+import { WebGPUView } from './webgpu-view.js';
 
 import {
   MetaballWriteBuffer,
@@ -48,8 +47,10 @@ const MetaballMethods = {
   pointCloud: MetaballComputePointRenderer,
 };
 
-const SAMPLE_COUNT = 4;
+const SAMPLE_COUNT = 1;
 const DEPTH_FORMAT = "depth24plus";
+
+const MAX_VIEW_COUNT = 2;
 
 export class WebGPURenderer extends Renderer {
   constructor() {
@@ -61,13 +62,17 @@ export class WebGPURenderer extends Renderer {
 
     this.context = this.canvas.getContext('webgpu');
 
-    //this.gpuStats = new GPUStats();
     this.metaballMethod = null;
+
+    this.xrBinding = null;
+    this.xrLayer = null;
+    this.xrRefSpace = null;
   }
 
   async init() {
     this.adapter = await navigator.gpu.requestAdapter({
       powerPreference: "high-performance",
+      xrCompatible: true,
     });
 
     // Enable compressed textures if available
@@ -111,7 +116,7 @@ export class WebGPURenderer extends Renderer {
       // attachment is acquired and set in onFrame.
       resolveTarget: undefined,
       loadOp: 'clear',
-      storeOp: 'discard', // Discards the multisampled view, not the resolveTarget
+      storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
     };
 
     this.depthAttachment = {
@@ -212,7 +217,7 @@ export class WebGPURenderer extends Renderer {
       })
     };
 
-    this.bindGroupLayouts.frame.label = "frame-bgl-SUPER ULTRA COOL EDITION";
+    this.bindGroupLayouts.frame.label = "frame-bgl";
 
     this.pipelineLayout = this.device.createPipelineLayout({
       bindGroupLayouts: [
@@ -222,16 +227,6 @@ export class WebGPURenderer extends Renderer {
       ]
     });
 
-    this.projectionBuffer = this.device.createBuffer({
-      size: ProjectionUniformsSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    });
-
-    this.viewBuffer = this.device.createBuffer({
-      size: ViewUniformsSize,
-      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
-    });
-
     this.lightsBuffer = this.device.createBuffer({
       size: this.lightManager.uniformArray.byteLength,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.STORAGE,
@@ -239,31 +234,13 @@ export class WebGPURenderer extends Renderer {
 
     this.clusteredLights = new ClusteredLightManager(this);
 
+    this.views = [];
+    for (let i = 0; i < MAX_VIEW_COUNT; ++i) {
+      this.views.push(new WebGPUView(this));
+    }
+
     this.bindGroups = {
-      frame: this.device.createBindGroup({
-        layout: this.bindGroupLayouts.frame,
-        entries: [{
-          binding: 0,
-          resource: {
-            buffer: this.projectionBuffer,
-          },
-        }, {
-          binding: 1,
-          resource: {
-            buffer: this.viewBuffer,
-          },
-        }, {
-          binding: 2,
-          resource: {
-            buffer: this.lightsBuffer,
-          },
-        }, {
-          binding: 3,
-          resource: {
-            buffer: this.clusteredLights.clusterLightsBuffer,
-          }
-        }],
-      })
+      frame: this.views[0].bindGroup
     }
 
     this.defaultSampler = this.device.createSampler({
@@ -287,13 +264,15 @@ export class WebGPURenderer extends Renderer {
 
     // Canvas/context resize already handled in base class.
 
-    const msaaColorTexture = this.device.createTexture({
-      size: { width, height },
-      sampleCount: SAMPLE_COUNT,
-      format: this.contextFormat,
-      usage: GPUTextureUsage.RENDER_ATTACHMENT,
-    });
-    this.colorAttachment.view = msaaColorTexture.createView();
+    if (SAMPLE_COUNT > 1) {
+      const msaaColorTexture = this.device.createTexture({
+        size: { width, height },
+        sampleCount: SAMPLE_COUNT,
+        format: this.contextFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.colorAttachment.view = msaaColorTexture.createView();
+    }
 
     const depthTexture = this.device.createTexture({
       size: { width, height },
@@ -303,8 +282,7 @@ export class WebGPURenderer extends Renderer {
     });
     this.depthAttachment.view = depthTexture.createView();
 
-    // Update the Projection uniforms. These only need to be updated on resize.
-    this.device.queue.writeBuffer(this.projectionBuffer, 0, this.frameUniforms.buffer, 0, ProjectionUniformsSize);
+    this.views[0].updateMatrices(this.camera);
 
     // On every size change we need to re-compute the cluster grid.
     this.clusteredLights.updateClusterBounds();
@@ -368,16 +346,17 @@ export class WebGPURenderer extends Renderer {
     }
   }
 
-  onFrame(timestamp) {
-    //this.gpuStats.begin();
-
+  onFrame(timestamp, timeDelta) {
     // TODO: If we want multisampling this should attach to the resolveTarget,
     // but there seems to be a bug with that right now?
-    this.colorAttachment.resolveTarget = this.context.getCurrentTexture().createView();
+    if (SAMPLE_COUNT > 1) {
+      this.colorAttachment.resolveTarget = this.context.getCurrentTexture().createView();
+    } else {
+      this.colorAttachment.view = this.context.getCurrentTexture().createView();
+    }
 
-    // Update the View uniforms buffer with the values. These are used by most shader programs
-    // and don't change for the duration of the frame.
-    this.device.queue.writeBuffer(this.viewBuffer, 0, this.frameUniforms.buffer, ProjectionUniformsSize, ViewUniformsSize);
+    // Copy values from the camera into our frame uniform buffers
+    this.views[0].updateMatrices(this.camera);
 
     // Update the light unform buffer with the latest values as well.
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
@@ -390,18 +369,18 @@ export class WebGPURenderer extends Renderer {
     const passEncoder = commandEncoder.beginRenderPass(this.renderPassDescriptor);
 
     if (this.scene && this.renderEnvironment) {
-      this.scene.draw(passEncoder);
+      this.scene.draw(passEncoder, this.views[0]);
     }
 
     if (this.drawMetaballs && this.metaballRenderer && this.bindGroups.metaball) {
       // Draw metaballs.
-      this.metaballRenderer.draw(passEncoder);
+      this.metaballRenderer.draw(passEncoder, this.views[0]);
     }
 
     if (this.lightManager.render) {
       // Last, render a sprite for all of the lights. This is done using instancing so it's a single
       // call for every light.
-      this.lightSprites.draw(passEncoder);
+      this.lightSprites.draw(passEncoder, this.views[0]);
     }
 
     passEncoder.end();
@@ -416,7 +395,90 @@ export class WebGPURenderer extends Renderer {
         this.stats.addSample(key, result);
       }
     });
+  }
 
-    //this.gpuStats.end();
+  async onXRStarted() {
+    this.xrBinding = new XRGPUBinding(this.xrSession, this.device);
+
+    // TODO: Use XR preferred color format
+    this.xrLayer = this.xrBinding.createProjectionLayer({
+      colorFormat: this.contextFormat,
+      depthStencilFormat: this.depthFormat,
+    });
+
+    this.xrSession.updateRenderState({ layers: [this.xrLayer] });
+
+    const localFloorSpace = await this.xrSession.requestReferenceSpace('local-floor');
+
+    // Scoot our reference space origin back a bit so that we don't start inside the metaballs.
+    const offset = new XRRigidTransform({z: -1.8});
+    this.xrRefSpace = localFloorSpace.getOffsetReferenceSpace(offset);
+  }
+
+  onXRFrame(timestamp, timeDelta, xrFrame) {
+    // Update the light unform buffer with the latest values as well.
+    this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
+
+    const commandEncoder = this.device.createCommandEncoder({});
+    this.clusteredLights.updateClusterLights(commandEncoder);
+
+    let pose = xrFrame.getViewerPose(this.xrRefSpace);
+
+    if (pose) {
+      for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
+        const view = pose.views[viewIndex];
+
+        this.views[viewIndex].updateMatricesForXR(view);
+
+        let subImage = this.xrBinding.getViewSubImage(this.xrLayer, view);
+
+        const renderPass = commandEncoder.beginRenderPass({
+            colorAttachments: [{
+              view: subImage.colorTexture.createView(subImage.getViewDescriptor()),
+              loadOp: 'clear',
+              storeOp: 'store',
+              clearValue: [0.1, 0.0, 0.4, 1.0],
+            }],
+            depthStencilAttachment: {
+              view: subImage.depthStencilTexture.createView(subImage.getViewDescriptor()),
+              depthLoadOp: 'clear',
+              depthStoreOp: 'store',
+              depthClearValue: 1.0,
+            },
+            timestampWrites: this.timestampHelper.timestampWrites(`View ${viewIndex}`)
+          });
+
+        let vp = subImage.viewport;
+        renderPass.setViewport(vp.x, vp.y, vp.width, vp.height, 0.0, 1.0);
+
+        if (this.scene && this.renderEnvironment) {
+          this.scene.draw(renderPass, this.views[viewIndex]);
+        }
+    
+        if (this.drawMetaballs && this.metaballRenderer && this.bindGroups.metaball) {
+          // Draw metaballs.
+          this.metaballRenderer.draw(renderPass, this.views[viewIndex]);
+        }
+    
+        if (this.lightManager.render) {
+          // Last, render a sprite for all of the lights. This is done using instancing so it's a single
+          // call for every light.
+          this.lightSprites.draw(renderPass, this.views[viewIndex]);
+        }
+
+        renderPass.end();
+      }
+    }
+
+    this.timestampHelper.resolve(commandEncoder);
+
+    const commandBuffer = commandEncoder.finish();
+    this.device.queue.submit([commandBuffer]);
+
+    this.timestampHelper.read().then((results) => {
+      for (let [key, result] of Object.entries(results)) {
+        this.stats.addSample(key, result);
+      }
+    });
   }
 }

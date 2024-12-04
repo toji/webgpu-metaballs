@@ -118,10 +118,10 @@ class WebGPUMetaballRendererBase {
     throw new Error('update must be implemented in a class that extends WebGPUMetaballRendererBase');
   }
 
-  draw(passEncoder) {
+  draw(passEncoder, view) {
     if (this.indexCount) {
       passEncoder.setPipeline(this.pipeline);
-      passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
+      passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
       passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
       passEncoder.setVertexBuffer(0, this.vertexBuffer);
       passEncoder.setVertexBuffer(1, this.normalBuffer);
@@ -721,17 +721,15 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
   }
 
-  draw(passEncoder) {
+  draw(passEncoder, view) {
     passEncoder.setPipeline(this.pipeline);
-    passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
+    passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
     passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
     passEncoder.setVertexBuffer(0, this.vertexBuffer);
     passEncoder.setVertexBuffer(1, this.normalBuffer);
     passEncoder.setIndexBuffer(this.indexBuffer, 'uint32');
     passEncoder.drawIndexedIndirect(this.indirectBuffer, 16);
   }
-
-  // TODO: DrawIndirect once the buffers are dynamically packed.
 }
 
 export class MetaballComputePointRenderer extends MetaballComputeRenderer {
@@ -790,10 +788,10 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
     });
   }
 
-  draw(passEncoder) {
+  draw(passEncoder, view) {
     if (this.indexCount) {
       passEncoder.setPipeline(this.pipeline);
-      passEncoder.setBindGroup(BIND_GROUP.Frame, this.renderer.bindGroups.frame);
+      passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
       passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
       passEncoder.setVertexBuffer(0, this.vertexBuffer);
       passEncoder.setVertexBuffer(1, this.normalBuffer);

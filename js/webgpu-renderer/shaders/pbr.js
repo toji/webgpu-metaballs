@@ -227,6 +227,18 @@ fn lightRadiance(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
   let attenuation = rangeAttenuation(light.range, distance);
   let radiance = light.color * light.intensity * attenuation;
   return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
+}
+  
+fn lightRadianceSimple(light : PuctualLight, surface : SurfaceInfo) -> vec3f {
+  let L = normalize(light.pointToLight);
+  let distance = length(light.pointToLight);
+
+  let NdotL = max(dot(surface.normal, L), 0.0);
+
+  // add to outgoing radiance Lo
+  let attenuation = rangeAttenuation(light.range, distance);
+  let radiance = light.color * light.intensity * attenuation;
+  return (surface.albedo / vec3(PI)) * radiance * NdotL;
 }`;
 
 export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
@@ -266,6 +278,7 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
 
       // calculate per-light radiance and add to outgoing radiance Lo
       Lo = Lo + lightRadiance(light, surface);
+      //Lo = Lo + lightRadianceSimple(light, surface);
     }
 
     let ambient = globalLights.ambient * surface.albedo * surface.ao;

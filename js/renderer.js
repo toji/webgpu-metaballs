@@ -120,22 +120,6 @@ export class Renderer {
 
     this.lightPattern = 'wandering';
 
-    // Storage for global uniforms.
-    // These can either be used individually or as a uniform buffer.
-    this.frameUniforms = new Float32Array(16 + 16 + 16 + 4 + 4);
-
-    this.projectionMatrix = new Float32Array(this.frameUniforms.buffer, 0, 16);
-    this.inverseProjectionMatrix = new Float32Array(this.frameUniforms.buffer, 16 * 4, 16);
-    this.outputSize = new Float32Array(this.frameUniforms.buffer, 32 * 4, 2);
-    this.zRange = new Float32Array(this.frameUniforms.buffer, 34 * 4, 2);
-
-    this.zRange[0] = 0.2; // Near
-    this.zRange[1] = 100.0; // Far
-
-    this.viewMatrix = new Float32Array(this.frameUniforms.buffer, 36 * 4, 16);
-    this.cameraPosition = new Float32Array(this.frameUniforms.buffer, 52 * 4, 3);
-    this.timeArray = new Float32Array(this.frameUniforms.buffer, 55 * 4, 1);
-
     // Allocate all the scene's lights
     this.lightManager = new LightManager(1024);
     this.sceneLightCount = 0;
@@ -147,8 +131,11 @@ export class Renderer {
     this.drawMetaballs = true;
     this.marchingCubes = null;
 
+    this.xrSession = null;
+
     let lastTimestamp = -1;
     this.frameCallback = (timestamp) => {
+      if (this.xrSession) { return; }
       const timeDelta = lastTimestamp == -1 ? 0 : timestamp - lastTimestamp;
       lastTimestamp = timestamp;
       this.rafId = requestAnimationFrame(this.frameCallback);
@@ -168,6 +155,26 @@ export class Renderer {
       }
     };
 
+    this.xrFrameCallback = (timestamp, xrFrame) => {
+      const timeDelta = lastTimestamp == -1 ? 0 : timestamp - lastTimestamp;
+      lastTimestamp = timestamp;
+      this.rafId = this.xrSession.requestAnimationFrame(this.xrFrameCallback);
+      this.frameCount++;
+      if (this.frameCount % 200 == 0) { return; }
+
+      if (this.stats) {
+        this.stats.beginFrame();
+      }
+
+      this.beforeFrame(timestamp, timeDelta);
+
+      this.onXRFrame(timestamp, timeDelta, xrFrame);
+
+      if (this.stats) {
+        this.stats.endFrame();
+      }
+    };
+
     this.resizeCallback = () => {
       // Just to make life a little easier on some lower-end devices.
       const scalar = Math.min(devicePixelRatio, 1.5);
@@ -178,15 +185,6 @@ export class Renderer {
       if (this.canvas.width == 0 || this.canvas.height == 0) {
         return;
       }
-
-      this.outputSize[0] = this.canvas.width;
-      this.outputSize[1] = this.canvas.height;
-
-      const aspect = this.canvas.width / this.canvas.height;
-      // Using mat4.perspectiveZO instead of mat4.perpective because WebGPU's
-      // normalized device coordinates Z range is [0, 1], instead of WebGL's [-1, 1]
-      mat4.perspectiveZO(this.projectionMatrix, Math.PI * 0.5, aspect, this.zRange[0], this.zRange[1]);
-      mat4.invert(this.inverseProjectionMatrix, this.projectionMatrix);
 
       this.onResize(this.canvas.width, this.canvas.height);
     };
@@ -327,10 +325,7 @@ export class Renderer {
 
   // Handles frame logic that's common to all renderers.
   beforeFrame(timestamp, timeDelta) {
-    // Copy values from the camera into our frame uniform buffers
-    mat4.copy(this.viewMatrix, this.camera.viewMatrix);
-    vec3.copy(this.cameraPosition, this.camera.position);
-    this.timeArray[0] = timestamp;
+    //this.timeArray[0] = timestamp;
 
     if (this.drawMetaballs) {
       this.updateMetaballs(timestamp);
@@ -341,9 +336,26 @@ export class Renderer {
     // Override with renderer-specific resize logic.
   }
 
-  onFrame(timestamp) {
+  onFrame(timestamp, timeDelta) {
     // Override with renderer-specific frame logic.
   }
 
+  onXRFrame(timestamp, timeDelta, xrFrame) {
+    // Override with renderer-specific frame logic.
+  }
 
+  async setWebXRSession(session) {
+    this.xrSession = session;
+    if (!this.xrSession) {
+      this.onXREnded();
+      requestAnimationFrame(this.frameCallback);
+      return;
+    }
+
+    await this.onXRStarted();
+    this.xrSession.requestAnimationFrame(this.xrFrameCallback);
+  }
+
+  async onXRStarted() {}
+  onXREnded() {}
 }
