@@ -121,7 +121,7 @@ export class WebGPURenderer extends Renderer {
       resolveTarget: undefined,
       loadOp: 'clear',
       storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
-      clearValue: [0.0, 0.0, 0.2, 1.0]
+      clearValue: [0.0, 0.0, 0.1, 1.0]
     };
 
     this.depthAttachment = {
