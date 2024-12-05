@@ -179,12 +179,13 @@ export const ClusterLightsSource = /*wgsl*/`
     var clusterLightCount = 0u;
     var cluserLightIndices : array<u32, ${MAX_LIGHTS_PER_CLUSTER}>;
     for (var i = 0u; i < globalLights.lightCount; i = i + 1u) {
-      let range = globalLights.lights[i].range;
+      let light = globalLights.lights[i];
+      let range = light.range;
       // Lights without an explicit range affect every cluster, but this is a poor way to handle that.
       var lightInCluster = range <= 0.0;
 
       if (!lightInCluster) {
-        let lightViewPos = view.matrix * vec4(globalLights.lights[i].position, 1.0);
+        let lightViewPos = view.matrix * vec4(light.position, 1.0);
         let sqDist = sqDistPointAABB(lightViewPos.xyz, clusters.bounds[tileIndex].minAABB, clusters.bounds[tileIndex].maxAABB);
         lightInCluster = sqDist <= (range * range);
       }

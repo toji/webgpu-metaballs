@@ -97,11 +97,13 @@ export class ClusteredLightManager {
 
     const device = renderer.device;
     this.clusterLightsBuffer = device.createBuffer({
+      label: `Cluster Lights, view.id:${view.id}`,
       size: CLUSTER_LIGHTS_SIZE,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
     });
 
     this.clusterBoundsBuffer = device.createBuffer({
+      label: `Cluster Bounds, view.id:${view.id}`,
       size: TOTAL_TILES * 32, // Cluster x, y, z size * 32 bytes per cluster.
       usage: GPUBufferUsage.STORAGE
     });
@@ -112,6 +114,7 @@ export class ClusteredLightManager {
       this.clusterLightsPipeline = pipelines[1];
 
       this.clusterBoundsBindGroup = device.createBindGroup({
+        label: `Cluster Bounds, view.id:${view.id}`,
         layout: this.clusterBoundsPipeline.getBindGroupLayout(1),
         entries: [{
           binding: 0,
@@ -122,6 +125,7 @@ export class ClusteredLightManager {
       });
 
       this.clusterBoundsReadOnlyBindGroup = device.createBindGroup({
+        label: `Cluster Bounds (Read Only), view.id:${view.id}`,
         layout: this.clusterLightsPipeline.getBindGroupLayout(1),
         entries: [{
           binding: 0,

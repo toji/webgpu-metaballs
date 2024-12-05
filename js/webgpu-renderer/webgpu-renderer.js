@@ -218,9 +218,7 @@ export class WebGPURenderer extends Renderer {
       this.views.push(new WebGPUView(this));
     }
 
-    this.bindGroups = {
-      frame: this.views[0].bindGroup
-    }
+    this.bindGroups = {}
 
     this.defaultSampler = this.device.createSampler({
       addressModeU: 'repeat',
@@ -355,6 +353,7 @@ export class WebGPURenderer extends Renderer {
     }
 
     const passEncoder = commandEncoder.beginRenderPass({
+      label: '2D View',
       colorAttachments: [colorAttachment],
       depthStencilAttachment: {
         view: gpuView.getDepthTextureView(currentTexture, DEPTH_FORMAT, SAMPLE_COUNT),
@@ -399,69 +398,71 @@ export class WebGPURenderer extends Renderer {
   }
 
   onXRFrame(timestamp, timeDelta, xrFrame) {
+    let pose = xrFrame.getViewerPose(this.xrRefSpace);
+    if (!pose) { return; }
+
     // Update the light unform buffer with the latest values as well.
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
 
     const commandEncoder = this.device.createCommandEncoder({});
 
-    let pose = xrFrame.getViewerPose(this.xrRefSpace);
+    // First do a pass over the views to prep the uniforms/light clusters.
+    const computePass = commandEncoder.beginComputePass({
+      timestampWrites: this.timestampHelper.timestampWrites('Clusters'),
+    });
 
-    if (pose) {
-      // First do a pass over the views to prep the uniforms/light clusters.
-      const computePass = commandEncoder.beginComputePass({
-        timestampWrites: this.timestampHelper.timestampWrites('Clusters'),
-      });
+    const subImages = [];
 
-      for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
-        const xrView = pose.views[viewIndex];
-        const gpuView = this.views[viewIndex];
+    for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
+      const xrView = pose.views[viewIndex];
+      const gpuView = this.views[viewIndex];
+      subImages[viewIndex] = this.xrBinding.getViewSubImage(this.xrLayer, xrView);
 
-        // This uses writeBuffer, so it will be enqueued before the command buffer is submitted.
-        gpuView.updateMatricesForXR(xrView);
-        gpuView.clusteredLights.updateClusters(computePass);
+      // This uses writeBuffer, so it will be enqueued before the command buffer is submitted.
+      gpuView.updateMatricesForXR(xrView, subImages[viewIndex]);
+      gpuView.clusteredLights.updateClusters(computePass);
+    }
+
+    computePass.end();
+
+    // Next loop through all the views again and just do the rendering.
+    for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
+      const xrView = pose.views[viewIndex];
+      const gpuView = this.views[viewIndex];
+      const subImage = subImages[viewIndex];
+
+      const currentView = subImage.colorTexture.createView(subImage.getViewDescriptor());
+      const colorAttachment = {
+        loadOp: 'clear',
+        storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
+        clearValue: [0.0, 0.0, 0.1, 1.0]
+      };
+
+      if (SAMPLE_COUNT > 1) {
+        colorAttachment.view = gpuView.getMsaaTextureView(subImage.colorTexture, SAMPLE_COUNT);
+        colorAttachment.resolveTarget = currentView;
+      } else {
+        colorAttachment.view = currentView;
       }
 
-      computePass.end();
+      const renderPass = commandEncoder.beginRenderPass({
+          label: `XR View ${viewIndex} (${xrView.eye})`,
+          colorAttachments: [colorAttachment],
+          depthStencilAttachment: {
+            view: gpuView.getDepthTextureView(subImage.colorTexture, DEPTH_FORMAT, SAMPLE_COUNT),
+            depthLoadOp: 'clear',
+            depthStoreOp: 'store',
+            depthClearValue: 1.0,
+          },
+          timestampWrites: this.timestampHelper.timestampWrites(`View ${viewIndex}`)
+        });
 
-      // Next loop through all the views again and just do the rendering.
-      for (let viewIndex = 0; viewIndex < pose.views.length; ++viewIndex) {
-        const xrView = pose.views[viewIndex];
-        const gpuView = this.views[viewIndex];
+      const vp = subImage.viewport;
+      renderPass.setViewport(vp.x, vp.y, vp.width, vp.height, 0.0, 1.0);
 
-        const subImage = this.xrBinding.getViewSubImage(this.xrLayer, xrView);
+      this.renderScene(renderPass, gpuView);
 
-        const currentView = subImage.colorTexture.createView(subImage.getViewDescriptor());
-        const colorAttachment = {
-          loadOp: 'clear',
-          storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
-          clearValue: [0.0, 0.0, 0.1, 1.0]
-        };
-
-        if (SAMPLE_COUNT > 1) {
-          colorAttachment.view = gpuView.getMsaaTextureView(subImage.colorTexture, SAMPLE_COUNT);
-          colorAttachment.resolveTarget = currentView;
-        } else {
-          colorAttachment.view = currentView;
-        }
-
-        const renderPass = commandEncoder.beginRenderPass({
-            colorAttachments: [colorAttachment],
-            depthStencilAttachment: {
-              view: gpuView.getDepthTextureView(subImage.colorTexture, DEPTH_FORMAT, SAMPLE_COUNT),
-              depthLoadOp: 'clear',
-              depthStoreOp: 'store',
-              depthClearValue: 1.0,
-            },
-            timestampWrites: this.timestampHelper.timestampWrites(`View ${viewIndex}`)
-          });
-
-        const vp = subImage.viewport;
-        renderPass.setViewport(vp.x, vp.y, vp.width, vp.height, 0.0, 1.0);
-
-        this.renderScene(passEncoder, gpuView);
-
-        renderPass.end();
-      }
+      renderPass.end();
     }
 
     this.timestampHelper.resolve(commandEncoder);

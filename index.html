@@ -71,15 +71,17 @@
       camera.orbitX = Math.PI * 0.1;
       camera.minOrbitX = Math.PI * -0.1;
 
+      const isMobile = navigator.userAgentData.mobile;
+
       const appSettings = {
         scene: './media/models/dungeon/dungeon-opt.glb',
         metaballMethod: 'gpuGenerated',
         renderLightSprites: true,
         renderEnvironment: true,
         environmentLights: true,
-        metaballLights: true,
-        metaballStyle: 'none',
-        metaballResolution: 0.075
+        metaballLights: !isMobile,
+        metaballStyle: 'lava',
+        metaballResolution: isMobile ? 0.1 : 0.075
       };
 
       const stats = new PerformanceTracker();
