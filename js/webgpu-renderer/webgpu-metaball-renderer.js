@@ -720,7 +720,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     }
 
     const passEncoder = commandEncoder.beginComputePass({
-      timestampWrites: timestampHelper.timestampWrites('Compute')
+      timestampWrites: timestampHelper.timestampWrites('Metaballs')
     });
 
     const dispatchSize = [

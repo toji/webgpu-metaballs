@@ -27,7 +27,7 @@ export class WebGPUView {
       size: ProjectionUniformsSize,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
     });
-  
+
     this.viewBuffer = renderer.device.createBuffer({
       size: ViewUniformsSize,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.UNIFORM,
@@ -59,6 +59,49 @@ export class WebGPUView {
         }
       }],
     });
+
+    this.msaaTexture = null;
+    this.msaaTextureView = null;
+    this.depthTexture = null;
+    this.depthTextureView = null;
+  }
+
+  getMsaaTextureView(colorTexture, sampleCount) {
+    if (!this.msaaTexture || this.msaaTexture?.sampleCount != sampleCount,
+        this.msaaTexture?.format != colorTexture.format ||
+        this.msaaTexture?.width != colorTexture.width ||
+        this.msaaTexture?.height != colorTexture.height) {
+      // Explicitly destroying previous textures when resizing helps avoid
+      // Out of Memory errors on the GPU.
+      if (this.msaaTexture) { this.msaaTexture.destroy(); }
+      this.msaaTexture = this.renderer.device.createTexture({
+        size: { width: colorTexture.width, height: colorTexture.height },
+        sampleCount,
+        format: colorTexture.format,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.msaaTextureView = this.msaaTexture.createView();
+    }
+    return this.msaaTextureView;
+  }
+
+  getDepthTextureView(colorTexture, format, sampleCount) {
+    if (!this.depthTexture || this.depthTexture?.sampleCount != sampleCount,
+        this.depthTexture?.format != format ||
+        this.depthTexture?.width != colorTexture.width ||
+        this.depthTexture?.height != colorTexture.height) {
+      // Explicitly destroying previous textures when resizing helps avoid
+      // Out of Memory errors on the GPU.
+      if (this.depthTexture) { this.depthTexture.destroy(); }
+      this.depthTexture = this.renderer.device.createTexture({
+        size: { width: colorTexture.width, height: colorTexture.height },
+        sampleCount,
+        format,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.depthTextureView = this.depthTexture.createView();
+    }
+    return this.depthTextureView;
   }
 
   updateMatrices(camera) {

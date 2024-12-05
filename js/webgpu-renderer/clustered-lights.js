@@ -36,6 +36,19 @@ export class ClusteredLightManager {
     let promise = ClusteredLightManager.rendererPipelinePromises.get(renderer);
     if (!promise) {
       const device = renderer.device;
+
+      // These two bind groups layout expose the same buffer but with different
+      // access, because the bounds don't need to be altered when the lights
+      // are being clustered.
+      const clusterBoundsBindGroupLayout = device.createBindGroupLayout({
+        label: `Cluster Storage Bind Group Layout`,
+        entries: [{
+          binding: 0,
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: 'storage' }
+        }]
+      });
+
       const clusterBoundsReadOnlyBindGroupLayout = device.createBindGroupLayout({
         label: `Cluster Bounds Bind Group Layout`,
         entries: [{
@@ -45,7 +58,20 @@ export class ClusteredLightManager {
         }]
       });
 
-      promise = device.createComputePipelineAsync({
+      const boundsPromise = device.createComputePipelineAsync({
+        layout: device.createPipelineLayout({
+          bindGroupLayouts: [
+            renderer.bindGroupLayouts.frame, // set 0
+            clusterBoundsBindGroupLayout, // set 1
+          ]
+        }),
+        compute: {
+          module: device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
+          entryPoint: 'main',
+        }
+      });
+
+      const lightsPromise = device.createComputePipelineAsync({
         layout: device.createPipelineLayout({
           bindGroupLayouts: [
             renderer.bindGroupLayouts.frame, // set 0
@@ -57,6 +83,8 @@ export class ClusteredLightManager {
           entryPoint: 'main',
         }
       });
+
+      promise = Promise.all([boundsPromise, lightsPromise]);
       ClusteredLightManager.rendererPipelinePromises.set(renderer, promise);
     }
     return promise;
@@ -78,47 +106,23 @@ export class ClusteredLightManager {
       usage: GPUBufferUsage.STORAGE
     });
 
-    // Cluster Bounds computation resources
-    const clusterStorageBindGroupLayout = device.createBindGroupLayout({
-      label: `Cluster Storage Bind Group Layout`,
-      entries: [{
-        binding: 0,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'storage' }
-      }]
-    });
-
-    this.clusterBoundsReady = device.createComputePipelineAsync({
-      layout: device.createPipelineLayout({
-        bindGroupLayouts: [
-          this.renderer.bindGroupLayouts.frame, // set 0
-          clusterStorageBindGroupLayout, // set 1
-        ]
-      }),
-      compute: {
-        module: device.createShaderModule({ code: ClusterBoundsSource, label: "Cluster Bounds" }),
-        entryPoint: 'main',
-      }
-    }).then((pipeline) => {
-      this.clusterBoundsPipeline = pipeline;
-    });
-
-    this.clusterStorageBindGroup = device.createBindGroup({
-      layout: clusterStorageBindGroupLayout,
-      entries: [{
-        binding: 0,
-        resource: {
-          buffer: this.clusterBoundsBuffer,
-        },
-      }],
-    });
-
-    // Cluster Lights computation resources
-    ClusteredLightManager.GetPipelineForRenderer(renderer).then((pipeline) => {
-      this.clusterLightsPipeline = pipeline;
+    // Cluster computation resources
+    ClusteredLightManager.GetPipelineForRenderer(renderer).then((pipelines) => {
+      this.clusterBoundsPipeline = pipelines[0];
+      this.clusterLightsPipeline = pipelines[1];
 
       this.clusterBoundsBindGroup = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(1),
+        layout: this.clusterBoundsPipeline.getBindGroupLayout(1),
+        entries: [{
+          binding: 0,
+          resource: {
+            buffer: this.clusterBoundsBuffer,
+          },
+        }],
+      });
+
+      this.clusterBoundsReadOnlyBindGroup = device.createBindGroup({
+        layout: this.clusterLightsPipeline.getBindGroupLayout(1),
         entries: [{
           binding: 0,
           resource: {
@@ -129,58 +133,44 @@ export class ClusteredLightManager {
     });
   }
 
-  updateClusterBounds(commandEncoder = null) {
+  updateClusters(computePass = null, updateBounds = true) {
     const device = this.renderer.device;
 
-    // If the cluster bounds pipeline isn't ready the first time we call this
-    // wait till it is ready and then call back into it again.
-    if (!this.clusterBoundsPipeline) {
-      this.clusterBoundsReady.then(() => {
-        this.updateClusterBounds();
-      });
-      return;
+    // If the cluster pipelines aren't ready return early.
+    if (!this.clusterLightsPipeline || (updateBounds && !this.clusterBoundsPipeline)) {
+      return false;
     }
-
-    const externalCommandEncoder = !!commandEncoder;
-    if (!externalCommandEncoder) {
-      commandEncoder = device.createCommandEncoder();
-    }
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(this.clusterBoundsPipeline);
-    passEncoder.setBindGroup(BIND_GROUP.Frame, this.view.bindGroup);
-    passEncoder.setBindGroup(1, this.clusterStorageBindGroup);
-    passEncoder.dispatchWorkgroups(...DISPATCH_SIZE);
-    passEncoder.end();
-
-    if (!externalCommandEncoder) {
-      device.queue.submit([commandEncoder.finish()]);
-    }
-  }
-
-  updateClusterLights(commandEncoder = null) {
-    const device = this.renderer.device;
-
-    if (!this.clusterLightsPipeline) { return; }
 
     // Reset the light offset counter to 0 before populating the light clusters.
     device.queue.writeBuffer(this.clusterLightsBuffer, 0, emptyArray);
 
-    const externalCommandEncoder = !!commandEncoder;
-    if (!externalCommandEncoder) {
+    const externalComputePass = !!computePass;
+    const commandEncoder = null;
+    if (!externalComputePass) {
       commandEncoder = device.createCommandEncoder();
+      computePass = commandEncoder.beginComputePass();
     }
 
-    // Update the FrameUniforms buffer with the values that are used by every
-    // program and don't change for the duration of the frame.
-    const passEncoder = commandEncoder.beginComputePass();
-    passEncoder.setPipeline(this.clusterLightsPipeline);
-    passEncoder.setBindGroup(BIND_GROUP.Frame, this.view.bindGroup);
-    passEncoder.setBindGroup(1, this.clusterBoundsBindGroup);
-    passEncoder.dispatchWorkgroups(...DISPATCH_SIZE);
-    passEncoder.end();
+    computePass.setBindGroup(BIND_GROUP.Frame, this.view.bindGroup);
 
-    if (!externalCommandEncoder) {
+    if (updateBounds) {
+      // Update the cluster bounds if needed. This has to happen any time the
+      // projection matrix changes, but not if the view matrix changes.
+      computePass.setPipeline(this.clusterBoundsPipeline);
+      computePass.setBindGroup(1, this.clusterBoundsBindGroup);
+      computePass.dispatchWorkgroups(...DISPATCH_SIZE);
+    }
+
+    // Update the lights for each cluster
+    computePass.setPipeline(this.clusterLightsPipeline);
+    computePass.setBindGroup(1, this.clusterBoundsReadOnlyBindGroup);
+    computePass.dispatchWorkgroups(...DISPATCH_SIZE);
+
+    if (!externalComputePass) {
+      computePass.end();
       device.queue.submit([commandEncoder.finish()]);
     }
+
+    return true;
   }
 }

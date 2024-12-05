@@ -26,7 +26,7 @@ import { ProjectionUniforms, ViewUniforms, LightUniforms, BIND_GROUP } from './c
 export const TILE_COUNT = [8, 8, 12];
 export const TOTAL_TILES = TILE_COUNT[0] * TILE_COUNT[1] * TILE_COUNT[2];
 
-const WORKGROUP_SIZE = [4, 2, 4];
+const WORKGROUP_SIZE = [4, 4, 4];
 export const DISPATCH_SIZE = [
   TILE_COUNT[0] / WORKGROUP_SIZE[0],
   TILE_COUNT[1] / WORKGROUP_SIZE[1],
@@ -119,7 +119,7 @@ export const ClusterBoundsSource = /*wgsl*/`
                     global_id.z * tileCount.x * tileCount.y;
 
     let tileSize = vec2(projection.outputSize.x / f32(tileCount.x),
-                             projection.outputSize.y / f32(tileCount.y));
+                        projection.outputSize.y / f32(tileCount.y));
 
     let maxPoint_sS = vec4(vec2(f32(global_id.x+1u), f32(global_id.y+1u)) * tileSize, 0.0, 1.0);
     let minPoint_sS = vec4(vec2(f32(global_id.x), f32(global_id.y)) * tileSize, 0.0, 1.0);

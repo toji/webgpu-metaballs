@@ -268,12 +268,13 @@ export function PBRClusteredFragmentSource(defines) { return /*wgsl*/`
 
     for (var lightIndex = 0u; lightIndex < lightCount; lightIndex = lightIndex + 1u) {
       let i = clusterLights.indices[lightOffset + lightIndex];
+      let gLight = &globalLights.lights[i];
 
       var light: PuctualLight;
-      light.pointToLight = globalLights.lights[i].position.xyz - input.worldPos;
-      light.range = globalLights.lights[i].range;
-      light.color = globalLights.lights[i].color;
-      light.intensity = globalLights.lights[i].intensity;
+      light.pointToLight = gLight.position.xyz - input.worldPos;
+      light.range = gLight.range;
+      light.color = gLight.color;
+      light.intensity = gLight.intensity;
 
       // calculate per-light radiance and add to outgoing radiance Lo
       Lo = Lo + lightRadiance(&light, &surface);
