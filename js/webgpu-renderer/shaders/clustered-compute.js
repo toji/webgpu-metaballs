@@ -26,7 +26,7 @@ import { ProjectionUniforms, ViewUniforms, LightUniforms, BIND_GROUP } from './c
 export const TILE_COUNT = [8, 8, 12];
 export const TOTAL_TILES = TILE_COUNT[0] * TILE_COUNT[1] * TILE_COUNT[2];
 
-const WORKGROUP_SIZE = [4, 2, 4];
+const WORKGROUP_SIZE = [4, 4, 4];
 export const DISPATCH_SIZE = [
   TILE_COUNT[0] / WORKGROUP_SIZE[0],
   TILE_COUNT[1] / WORKGROUP_SIZE[1],
@@ -119,7 +119,7 @@ export const ClusterBoundsSource = /*wgsl*/`
                     global_id.z * tileCount.x * tileCount.y;
 
     let tileSize = vec2(projection.outputSize.x / f32(tileCount.x),
-                             projection.outputSize.y / f32(tileCount.y));
+                        projection.outputSize.y / f32(tileCount.y));
 
     let maxPoint_sS = vec4(vec2(f32(global_id.x+1u), f32(global_id.y+1u)) * tileSize, 0.0, 1.0);
     let minPoint_sS = vec4(vec2(f32(global_id.x), f32(global_id.y)) * tileSize, 0.0, 1.0);
@@ -179,12 +179,13 @@ export const ClusterLightsSource = /*wgsl*/`
     var clusterLightCount = 0u;
     var cluserLightIndices : array<u32, ${MAX_LIGHTS_PER_CLUSTER}>;
     for (var i = 0u; i < globalLights.lightCount; i = i + 1u) {
-      let range = globalLights.lights[i].range;
+      let light = globalLights.lights[i];
+      let range = light.range;
       // Lights without an explicit range affect every cluster, but this is a poor way to handle that.
       var lightInCluster = range <= 0.0;
 
       if (!lightInCluster) {
-        let lightViewPos = view.matrix * vec4(globalLights.lights[i].position, 1.0);
+        let lightViewPos = view.matrix * vec4(light.position, 1.0);
         let sqDist = sqDistPointAABB(lightViewPos.xyz, clusters.bounds[tileIndex].minAABB, clusters.bounds[tileIndex].maxAABB);
         lightInCluster = sqDist <= (range * range);
       }

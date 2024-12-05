@@ -80,10 +80,8 @@ class Light {
   }
 }
 
-class LightManager extends EventTarget {
+class LightManager {
   constructor(lightCount) {
-    super();
-
     this.maxLightCount = lightCount;
 
     this.uniformArray = new Float32Array(4 + Light.floatSize * lightCount);
@@ -274,6 +272,7 @@ export class Renderer {
         break;
       case 'none':
         this.drawMetaballs = false;
+        this.metaballTexturePath = null;
         this.lightManager.lightCount = this.sceneLightCount;
         break;
     }
@@ -281,14 +280,14 @@ export class Renderer {
 
   setMetaballStep(step) {
     this.marchingCubes = new MarchingCubes({
-      xMin: -1,
-      xMax: 1,
+      xMin: -1.05,
+      xMax: 1.05,
       xStep: step,
       yMin: -0.1,
       yMax: 2.5,
       yStep: step,
-      zMin: -1,
-      zMax: 1,
+      zMin: -1.05,
+      zMax: 1.1,
       zStep: step,
     });
   }

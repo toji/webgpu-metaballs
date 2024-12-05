@@ -68,9 +68,9 @@ export class Metaballs {
       return 0;
     }*/
     // Always render geometry on the floor
-    /*if (y < 0) {
+    if ((x*x + z*z < 1.1) && y < 0) {
       return 100;
-    }*/
+    }
 
     vec3.set(TMP_VEC3, x, y, z);
     let result = 0;

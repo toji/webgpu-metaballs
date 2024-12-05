@@ -60,6 +60,12 @@ export const MetaballFieldComputeSource = /*wgsl*/`
 
   fn surfaceFunc(position : vec3f) -> f32 {
     var result = 0.0;
+
+    // Always render geometry on the floor
+    if ((position.x*position.x + position.z*position.z < 1.1) && position.y < 0) {
+      return 100;
+    }
+
     for (var i = 0u; i < metaballs.ballCount; i = i + 1) {
       let ball = metaballs.balls[i];
       let dist = distance(position, ball.position);
@@ -73,6 +79,7 @@ export const MetaballFieldComputeSource = /*wgsl*/`
 
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
+    if (any(global_id >= volume.size)) { return; }
     let position = positionAt(global_id);
     let valueIndex = global_id.x +
                     (global_id.y * volume.size.x) +
@@ -190,6 +197,8 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   // Main marching cubes algorithm
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
+    if (any(global_id >= volume.size)) { return; }
+
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
     let i1 = global_id + vec3u(1, 0, 0);
@@ -263,9 +272,10 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   }
 `;
 
-export const MetaballVertexSource = /*wgsl*/`
+export const MetaballRenderSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
+  ${ColorConversions}
 
   struct VertexInput {
     @location(${ATTRIB_MAP.POSITION}) position : vec3f,
@@ -273,57 +283,52 @@ export const MetaballVertexSource = /*wgsl*/`
   }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
+    @location(0) uvX : vec2f,
+    @location(1) uvY : vec2f,
+    @location(2) uvZ : vec2f,
+    @location(3) normal : vec3f,
     @builtin(position) position : vec4f,
   }
 
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
-    output.worldPosition = input.position;
+    let worldPosition = input.position;
+    let flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+
     output.normal = input.normal;
-    output.flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+    output.uvX = worldPosition.yz + flow.yz;
+    output.uvY = worldPosition.xz + flow.xz;
+    output.uvZ = worldPosition.xy + flow.xy;
 
     output.position = projection.matrix * view.matrix * vec4f(input.position, 1);
     return output;
   }
-`;
-
-export const MetaballFragmentSource = /*wgsl*/`
-  ${ColorConversions}
 
   @group(1) @binding(0) var baseSampler : sampler;
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
 
-  struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
-  }
-
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
-    let normal = normalize(input.normal);
+    // Force weights to sum to 1.0
+    let blending = normalize(max(abs(input.normal), vec3f(0.00001)));
 
-    var blending = abs(normal);
-    blending = normalize(max(blending, vec3f(0.00001))); // Force weights to sum to 1.0
+    let xTex = textureSample(baseTexture, baseSampler, input.uvX);
+    let yTex = textureSample(baseTexture, baseSampler, input.uvY);
+    let zTex = textureSample(baseTexture, baseSampler, input.uvZ);
 
-    let xTex = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
-    let yTex = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
-    let zTex = textureSample(baseTexture, baseSampler, input.worldPosition.xy + input.flow.xy);
     // blend the results of the 3 planar projections.
     let tex = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
-    return vec4f(linearTosRGB(tex.xyz), 1);
+    return vec4f(linearTosRGB(tex.rgb), 1);
   }
 `;
 
 // For visualizing the metaballs as a point cloud
-export const MetaballVertexPointSource = /*wgsl*/`
+export const MetaballRenderPointSource = /*wgsl*/`
   ${ProjectionUniforms}
   ${ViewUniforms}
+  ${ColorConversions}
 
   var<private> pos : array<vec2f, 4> = array<vec2f, 4>(
     vec2f(-1, 1), vec2f(1, 1), vec2f(-1, -1), vec2f(1, -1)
@@ -331,23 +336,16 @@ export const MetaballVertexPointSource = /*wgsl*/`
 
   struct VertexInput {
     @location(${ATTRIB_MAP.POSITION}) position : vec3f,
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3f,
     @builtin(vertex_index) vertexIndex : u32,
   }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
     @builtin(position) position : vec4f,
   }
 
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
-    output.worldPosition = input.position;
-    output.normal = input.normal;
-    output.flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
 
     var bbModelViewMatrix : mat4x4f;
     bbModelViewMatrix[3] = vec4(input.position, 1.0);
@@ -367,19 +365,9 @@ export const MetaballVertexPointSource = /*wgsl*/`
     output.position = projection.matrix * bbModelViewMatrix * vec4f(pos[input.vertexIndex] * 0.005, 0, 1);
     return output;
   }
-`;
-
-export const MetaballFragmentPointSource = /*wgsl*/`
-  ${ColorConversions}
 
   @group(1) @binding(0) var baseSampler : sampler;
   @group(1) @binding(1) var baseTexture : texture_2d<f32>;
-
-  struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
-  }
 
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {

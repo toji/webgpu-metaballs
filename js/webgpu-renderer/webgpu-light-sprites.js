@@ -50,7 +50,7 @@ export class WebGPULightSprites {
         module: fragmentModule,
         entryPoint: 'fragmentMain',
         targets: [{
-          format: renderer.contextFormat,
+          format: renderer.renderFormat,
           blend: {
             color: {
               srcFactor: 'src-alpha',
@@ -80,9 +80,9 @@ export class WebGPULightSprites {
 
   draw(passEncoder, view) {
     // Last, render a sprite for all of the lights. This is done using instancing so it's a single
-      // call for every light.
-      passEncoder.setPipeline(this.pipeline);
-      passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
-      passEncoder.draw(4, this.renderer.lightManager.lightCount, 0, 0);
+    // call for every light.
+    passEncoder.setPipeline(this.pipeline);
+    passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
+    passEncoder.draw(4, this.renderer.lightManager.lightCount, 0, 0);
   }
 }
