@@ -555,7 +555,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.metaballArrayHeader = new Uint32Array(this.metaballArray, 0, 4);
     this.metaballArrayBalls = new Float32Array(this.metaballArray, 16);
 
-    this.marchingCubeCells = (volume.width-1) * (volume.height-1) * (volume.depth-1);
+    this.marchingCubeCells = (volume.width) * (volume.height) * (volume.depth);
     this.vertexBufferSize = (Float32Array.BYTES_PER_ELEMENT * 3) * 12 * this.marchingCubeCells;
     this.indexBufferSize = Uint32Array.BYTES_PER_ELEMENT * 15 * this.marchingCubeCells;
 
@@ -724,9 +724,9 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     });
 
     const dispatchSize = [
-      this.volume.width / WORKGROUP_SIZE[0],
-      this.volume.height / WORKGROUP_SIZE[1],
-      this.volume.depth / WORKGROUP_SIZE[2]
+      Math.ceil((this.volume.width) / WORKGROUP_SIZE[0]),
+      Math.ceil((this.volume.height) / WORKGROUP_SIZE[1]),
+      Math.ceil((this.volume.depth) / WORKGROUP_SIZE[2])
     ];
 
     if (this.metaballComputePipeline) {

@@ -280,14 +280,14 @@ export class Renderer {
 
   setMetaballStep(step) {
     this.marchingCubes = new MarchingCubes({
-      xMin: -1,
-      xMax: 1,
+      xMin: -1.05,
+      xMax: 1.05,
       xStep: step,
       yMin: -0.1,
       yMax: 2.5,
       yStep: step,
-      zMin: -1,
-      zMax: 1,
+      zMin: -1.05,
+      zMax: 1.1,
       zStep: step,
     });
   }

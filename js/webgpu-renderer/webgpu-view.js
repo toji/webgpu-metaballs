@@ -111,12 +111,14 @@ export class WebGPUView {
     return this.depthTextureView;
   }
 
-  updateMatrices(camera) {
+  updateMatrices(timestamp, camera) {
     this.outputSize[0] = this.renderer.canvas.width;
     this.outputSize[1] = this.renderer.canvas.height;
 
     this.zRange[0] = 0.2; // Near
     this.zRange[1] = 100.0; // Far
+
+    this.timeArray[0] = timestamp;
 
     const device = this.renderer.device;
     mat4.perspectiveZO(this.projectionMatrix, this.defaultFov, this.outputSize[0] / this.outputSize[1], this.zRange[0], this.zRange[1]);
@@ -128,12 +130,14 @@ export class WebGPUView {
     device.queue.writeBuffer(this.viewBuffer, 0, this.uniformsArray.buffer, ProjectionUniformsSize, ViewUniformsSize);
   }
 
-  updateMatricesForXR(xrView, subImage) {
+  updateMatricesForXR(timestamp, xrView, subImage) {
     this.outputSize[0] = subImage.colorTexture.width;
     this.outputSize[1] = subImage.colorTexture.height;
 
     this.zRange[0] = this.renderer.xrSession.renderState.depthNear;
     this.zRange[1] = this.renderer.xrSession.renderState.depthFar;
+
+    this.timeArray[0] = timestamp;
 
     const device = this.renderer.device;
     mat4.copy(this.projectionMatrix, xrView.projectionMatrix);

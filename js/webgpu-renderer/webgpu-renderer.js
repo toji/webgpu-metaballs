@@ -327,7 +327,7 @@ export class WebGPURenderer extends Renderer {
     this.device.queue.writeBuffer(this.lightsBuffer, 0, this.lightManager.uniformArray);
 
     // Copy values from the camera into our frame uniform buffers
-    gpuView.updateMatrices(this.camera);
+    gpuView.updateMatrices(timestamp, this.camera);
 
     const commandEncoder = this.device.createCommandEncoder({});
 
@@ -419,7 +419,7 @@ export class WebGPURenderer extends Renderer {
       subImages[viewIndex] = this.xrBinding.getViewSubImage(this.xrLayer, xrView);
 
       // This uses writeBuffer, so it will be enqueued before the command buffer is submitted.
-      gpuView.updateMatricesForXR(xrView, subImages[viewIndex]);
+      gpuView.updateMatricesForXR(timestamp, xrView, subImages[viewIndex]);
       gpuView.clusteredLights.updateClusters(computePass);
     }
 

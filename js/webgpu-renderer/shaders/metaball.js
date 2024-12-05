@@ -60,6 +60,12 @@ export const MetaballFieldComputeSource = /*wgsl*/`
 
   fn surfaceFunc(position : vec3f) -> f32 {
     var result = 0.0;
+
+    // Always render geometry on the floor
+    if ((position.x*position.x + position.z*position.z < 1.1) && position.y < 0) {
+      return 100;
+    }
+
     for (var i = 0u; i < metaballs.ballCount; i = i + 1) {
       let ball = metaballs.balls[i];
       let dist = distance(position, ball.position);
@@ -73,6 +79,7 @@ export const MetaballFieldComputeSource = /*wgsl*/`
 
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
+    if (any(global_id >= volume.size)) { return; }
     let position = positionAt(global_id);
     let valueIndex = global_id.x +
                     (global_id.y * volume.size.x) +
@@ -190,6 +197,8 @@ export const MarchingCubesComputeSource = /*wgsl*/`
   // Main marching cubes algorithm
   @compute @workgroup_size(${WORKGROUP_SIZE[0]}, ${WORKGROUP_SIZE[1]}, ${WORKGROUP_SIZE[2]})
   fn computeMain(@builtin(global_invocation_id) global_id : vec3u) {
+    if (any(global_id >= volume.size)) { return; }
+
     // Cache the values we're going to be referencing frequently.
     let i0 = global_id;
     let i1 = global_id + vec3u(1, 0, 0);
