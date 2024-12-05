@@ -560,7 +560,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.indexBufferSize = Uint32Array.BYTES_PER_ELEMENT * 15 * this.marchingCubeCells;
 
     this.indirectArray = new Uint32Array(9);
-    this.indirectArray[0] = 4; // Number of verticies for point rendering
+    this.indirectArray[0] = 4; // Number of vertices for point rendering
     this.indirectArray[5] = 1; // Number of instances for normal rendering
 
     const createMetaballResources = () => {
@@ -758,7 +758,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       return;
     }
 
-    const resource = this.resources[this.computeIndex];
+    const resource = this.resources[this.drawIndex];
 
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
@@ -794,14 +794,6 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
             offset: 0,
 
           }],
-        }, {
-          arrayStride: 12,
-          stepMode: 'instance',
-          attributes: [{
-            shaderLocation: ATTRIB_MAP.NORMAL,
-            format: 'float32x3',
-            offset: 0,
-          }],
         }]
       },
       fragment: {
@@ -827,13 +819,12 @@ export class MetaballComputePointRenderer extends MetaballComputeRenderer {
   }
 
   draw(passEncoder, view) {
-    if (this.indexCount) {
-      passEncoder.setPipeline(this.pipeline);
-      passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
-      passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
-      passEncoder.setVertexBuffer(0, this.vertexBuffer);
-      passEncoder.setVertexBuffer(1, this.normalBuffer);
-      passEncoder.drawIndirect(this.indirectBuffer, 0);
-    }
+    const resource = this.resources[this.drawIndex];
+
+    passEncoder.setPipeline(this.pipeline);
+    passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);
+    passEncoder.setBindGroup(1, this.renderer.bindGroups.metaball);
+    passEncoder.setVertexBuffer(0, resource.vertexBuffer);
+    passEncoder.drawIndirect(resource.indirectBuffer, 0);
   }
 }

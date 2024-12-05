@@ -332,23 +332,16 @@ export const MetaballRenderPointSource = /*wgsl*/`
 
   struct VertexInput {
     @location(${ATTRIB_MAP.POSITION}) position : vec3f,
-    @location(${ATTRIB_MAP.NORMAL}) normal : vec3f,
     @builtin(vertex_index) vertexIndex : u32,
   }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
     @builtin(position) position : vec4f,
   }
 
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
-    output.worldPosition = input.position;
-    output.normal = input.normal;
-    output.flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
 
     var bbModelViewMatrix : mat4x4f;
     bbModelViewMatrix[3] = vec4(input.position, 1.0);

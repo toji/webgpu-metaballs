@@ -48,6 +48,7 @@ const MetaballMethods = {
 
 const SAMPLE_COUNT = 4;
 const DEPTH_FORMAT = "depth24plus";
+const CLEAR_VALUE = [0.0, 0.0, 0.0, 0.0];
 
 const MAX_VIEW_COUNT = 2;
 
@@ -293,10 +294,6 @@ export class WebGPURenderer extends Renderer {
 
       this.metaballRenderer.updateMetaballs(this.metaballs, this.marchingCubes);
 
-      /*if (!this.scene) {
-        return;
-      }*/
-
       await this.metaballRenderer.update(this.marchingCubes, this.timestampHelper);
 
       this.metaballsNeedUpdate = true;
@@ -342,7 +339,7 @@ export class WebGPURenderer extends Renderer {
     const colorAttachment = {
       loadOp: 'clear',
       storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
-      clearValue: [0.0, 0.0, 0.1, 1.0]
+      clearValue: CLEAR_VALUE,
     };
 
     if (SAMPLE_COUNT > 1) {
@@ -435,7 +432,7 @@ export class WebGPURenderer extends Renderer {
       const colorAttachment = {
         loadOp: 'clear',
         storeOp: SAMPLE_COUNT > 1 ? 'discard' : 'store', // Discards the multisampled view, not the resolveTarget
-        clearValue: [0.0, 0.0, 0.1, 1.0]
+        clearValue: CLEAR_VALUE,
       };
 
       if (SAMPLE_COUNT > 1) {
