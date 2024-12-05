@@ -241,7 +241,7 @@ export class WebGPURenderer extends Renderer {
     this.adapterInfo.architecture == 'adreno-6xx';
   }
 
-  async setScene(gltf) {
+  setScene(gltf) {
     super.setScene(gltf);
     this.scene = new WebGPUglTF(this, gltf);
     this.updateMetaballs(0);
@@ -286,7 +286,7 @@ export class WebGPURenderer extends Renderer {
     this.setMetaballMethod(this.metaballMethod);
   }
 
-  async updateMetaballs(timestamp) {
+  updateMetaballs(timestamp) {
     if (this.drawMetaballs && this.metaballsNeedUpdate && this.metaballRenderer) {
       this.metaballsNeedUpdate = false;
 
@@ -294,7 +294,7 @@ export class WebGPURenderer extends Renderer {
 
       this.metaballRenderer.updateMetaballs(this.metaballs, this.marchingCubes);
 
-      await this.metaballRenderer.update(this.marchingCubes, this.timestampHelper);
+      this.metaballRenderer.update(this.marchingCubes);
 
       this.metaballsNeedUpdate = true;
     }
@@ -327,6 +327,9 @@ export class WebGPURenderer extends Renderer {
     gpuView.updateMatrices(timestamp, this.camera);
 
     const commandEncoder = this.device.createCommandEncoder({});
+
+    // First update the metaballs isosurface and mesh.
+    this.metaballRenderer.updateCompute(commandEncoder, this.timestampHelper);
 
     const computePass = commandEncoder.beginComputePass({
       timestampWrites: this.timestampHelper.timestampWrites('Clusters'),
@@ -383,6 +386,7 @@ export class WebGPURenderer extends Renderer {
     // TODO: Use XR preferred color format
     this.xrLayer = this.xrBinding.createProjectionLayer({
       colorFormat: this.contextFormat,
+      scaleFactor: 0.5,
     });
 
     this.xrSession.updateRenderState({ layers: [this.xrLayer] });
@@ -403,7 +407,10 @@ export class WebGPURenderer extends Renderer {
 
     const commandEncoder = this.device.createCommandEncoder({});
 
-    // First do a pass over the views to prep the uniforms/light clusters.
+    // First update the metaballs isosurface and mesh.
+    this.metaballRenderer.updateCompute(commandEncoder, this.timestampHelper);
+
+    // Next do a pass over the views to prep the uniforms/light clusters.
     const computePass = commandEncoder.beginComputePass({
       timestampWrites: this.timestampHelper.timestampWrites('Clusters'),
     });

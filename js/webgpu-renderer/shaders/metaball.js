@@ -283,18 +283,23 @@ export const MetaballRenderSource = /*wgsl*/`
   }
 
   struct VertexOutput {
-    @location(0) worldPosition : vec3f,
-    @location(1) normal : vec3f,
-    @location(2) flow : vec3f,
+    @location(0) uvX : vec2f,
+    @location(1) uvY : vec2f,
+    @location(2) uvZ : vec2f,
+    @location(3) normal : vec3f,
     @builtin(position) position : vec4f,
   }
 
   @vertex
   fn vertexMain(input : VertexInput) -> VertexOutput {
     var output : VertexOutput;
-    output.worldPosition = input.position;
+    let worldPosition = input.position;
+    let flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+
     output.normal = input.normal;
-    output.flow = vec3f(sin(view.time * 0.0001), cos(view.time * 0.0004), sin(view.time * 0.00007));
+    output.uvX = worldPosition.yz + flow.yz;
+    output.uvY = worldPosition.xz + flow.xz;
+    output.uvZ = worldPosition.xy + flow.xy;
 
     output.position = projection.matrix * view.matrix * vec4f(input.position, 1);
     return output;
@@ -305,18 +310,17 @@ export const MetaballRenderSource = /*wgsl*/`
 
   @fragment
   fn fragmentMain(input : VertexOutput) -> @location(0) vec4f {
-    let normal = normalize(input.normal);
+    // Force weights to sum to 1.0
+    let blending = normalize(max(abs(input.normal), vec3f(0.00001)));
 
-    var blending = abs(normal);
-    blending = normalize(max(blending, vec3f(0.00001))); // Force weights to sum to 1.0
+    let xTex = textureSample(baseTexture, baseSampler, input.uvX);
+    let yTex = textureSample(baseTexture, baseSampler, input.uvY);
+    let zTex = textureSample(baseTexture, baseSampler, input.uvZ);
 
-    let xTex = textureSample(baseTexture, baseSampler, input.worldPosition.yz + input.flow.yz);
-    let yTex = textureSample(baseTexture, baseSampler, input.worldPosition.xz + input.flow.xz);
-    let zTex = textureSample(baseTexture, baseSampler, input.worldPosition.xy + input.flow.xy);
     // blend the results of the 3 planar projections.
     let tex = xTex * blending.x + yTex * blending.y + zTex * blending.z;
 
-    return vec4f(linearTosRGB(tex.xyz), 1);
+    return vec4f(linearTosRGB(tex.rgb), 1);
   }
 `;
 

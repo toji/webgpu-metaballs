@@ -117,6 +117,10 @@ class WebGPUMetaballRendererBase {
     throw new Error('update must be implemented in a class that extends WebGPUMetaballRendererBase');
   }
 
+  updateCompute(commandEncoder, timestampHelper) {
+    // Only for the GPU-based renderers
+  }
+
   draw(passEncoder, view) {
     if (this.indexCount && this.pipeline) {
       passEncoder.setPipeline(this.pipeline);
@@ -595,6 +599,7 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       return resources;
     }
 
+    // Two sets of resources so we can ping-pong between them
     this.resources = [createMetaballResources(), createMetaballResources()];
 
     // Create compute pipeline that handles the metaball isosurface.
@@ -684,7 +689,6 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
   }
 
   updateMetaballs(metaballs, marchingCubes) {
-    this.computeIndex = this.drawIndex;
     this.metaballArrayHeader[0] = metaballs.balls.length;
 
     for (let i = 0; i < metaballs.balls.length; ++i) {
@@ -702,13 +706,21 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     this.device.queue.writeBuffer(this.resources[this.computeIndex].metaballBuffer, 0, this.metaballArray);
   }
 
-  update(marchingCubes, timestampHelper) {
-    const resource = this.resources[this.computeIndex];
-    // Zero out the indirect buffer every time.
-    this.device.queue.writeBuffer(resource.indirectBuffer, 0, this.indirectArray);
+  update(marchingCubes) {}
 
-    // Run the compute shader to fill the position/normal/index buffers.
-    const commandEncoder = this.device.createCommandEncoder();
+  updateCompute(commandEncoder, timestampHelper) {
+    this.drawIndex = this.computeIndex;
+    this.computeIndex = (this.computeIndex + 1) % this.resources.length;
+
+    const resource = this.resources[this.computeIndex];
+
+    const dispatchSize = [
+      Math.ceil((this.volume.width) / WORKGROUP_SIZE[0]),
+      Math.ceil((this.volume.height) / WORKGROUP_SIZE[1]),
+      Math.ceil((this.volume.depth) / WORKGROUP_SIZE[2])
+    ];
+
+    this.device.queue.writeBuffer(resource.indirectBuffer, 0, this.indirectArray);
 
     if (this.renderer.needsComputeWorkaround) {
       // For the Pixel 4, something about the indirect draw is causing a crash
@@ -719,36 +731,25 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       this.indexCount = this.indexBufferSize / Uint32Array.BYTES_PER_ELEMENT;
     }
 
-    const passEncoder = commandEncoder.beginComputePass({
-      timestampWrites: timestampHelper.timestampWrites('Metaballs')
-    });
+    if (this.metaballComputePipeline && this.marchingCubesComputePipeline) {
+      // Run the compute shaders to fill the position/normal/index buffers.
+      const passEncoder = commandEncoder.beginComputePass({
+        timestampWrites: timestampHelper.timestampWrites('Metaballs')
+      });
 
-    const dispatchSize = [
-      Math.ceil((this.volume.width) / WORKGROUP_SIZE[0]),
-      Math.ceil((this.volume.height) / WORKGROUP_SIZE[1]),
-      Math.ceil((this.volume.depth) / WORKGROUP_SIZE[2])
-    ];
-
-    if (this.metaballComputePipeline) {
       passEncoder.setPipeline(this.metaballComputePipeline);
       passEncoder.setBindGroup(0, resource.metaballComputeBindGroup);
       passEncoder.dispatchWorkgroups(...dispatchSize);
-    }
 
-    if (this.marchingCubesComputePipeline) {
       passEncoder.setPipeline(this.marchingCubesComputePipeline);
       passEncoder.setBindGroup(0, resource.marchingCubesComputeBindGroup);
       passEncoder.dispatchWorkgroups(...dispatchSize);
+
+      passEncoder.end();
     }
-
-    passEncoder.end();
-
-    this.device.queue.submit([commandEncoder.finish()]);
   }
 
   draw(passEncoder, view) {
-    this.drawIndex = (this.drawIndex + 1) % this.resources.length;
-
     // Pipeline may not be ready because it's created asynchronously.
     if (!this.pipeline) { return; }
 

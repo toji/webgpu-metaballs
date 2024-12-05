@@ -211,7 +211,7 @@ fn lightRadiance(light: ptr<function, PuctualLight>, surface: ptr<function, Surf
 
   let radiance = light.color * light.intensity * lightAttenuation(light);
 
-  if (surface.roughness < 0.9) {
+  /*if (surface.roughness < 0.9) {
     // cook-torrance brdf
     let H = normalize(surface.v + L);
     let NDF = DistributionGGX(surface.normal, H, surface.roughness);
@@ -226,11 +226,11 @@ fn lightRadiance(light: ptr<function, PuctualLight>, surface: ptr<function, Surf
 
     // add to outgoing radiance Lo
     return (kD * surface.albedo / vec3(PI) + specular) * radiance * NdotL;
-  } else {
+  } else {*/
     // For completely rough surfaces (or near to it) use a significantly simplified model.
     // TODO: Definitely not energy preserving
     return (surface.albedo / vec3(PI)) * radiance * NdotL;
-  }
+  //}
 }
 
 fn lightRadianceSimple(light: ptr<function, PuctualLight>, surface: ptr<function, SurfaceInfo>) -> vec3f {
