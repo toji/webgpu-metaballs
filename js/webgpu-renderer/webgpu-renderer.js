@@ -68,6 +68,7 @@ export class WebGPURenderer extends Renderer {
     this.xrBinding = null;
     this.xrLayer = null;
     this.xrRefSpace = null;
+    this.inAR = false;
   }
 
   async init() {
@@ -244,6 +245,9 @@ export class WebGPURenderer extends Renderer {
   setScene(gltf) {
     super.setScene(gltf);
     this.scene = new WebGPUglTF(this, gltf);
+    if (this.inAR) {
+      this.scene.setNodeFilter(/floor_ring/);
+    }
     this.updateMetaballs(0);
   }
 
@@ -380,13 +384,13 @@ export class WebGPURenderer extends Renderer {
     });
   }
 
-  async onXRStarted() {
+  async onXRStarted(options) {
     this.xrBinding = new XRGPUBinding(this.xrSession, this.device);
 
     // TODO: Use XR preferred color format
     this.xrLayer = this.xrBinding.createProjectionLayer({
       colorFormat: this.contextFormat,
-      scaleFactor: 0.5,
+      scaleFactor: options?.scaleFactor ?? 1.0,
     });
 
     this.xrSession.updateRenderState({ layers: [this.xrLayer] });
@@ -396,6 +400,15 @@ export class WebGPURenderer extends Renderer {
     // Scoot our reference space origin back a bit so that we don't start inside the metaballs.
     const offset = new XRRigidTransform({z: -1.8});
     this.xrRefSpace = localFloorSpace.getOffsetReferenceSpace(offset);
+
+    this.inAR = this.xrSession.environmentBlendMode == 'alpha-blend' || this.xrSession.environmentBlendMode == 'additive';
+    if (this.scene && this.inAR) {
+      this.scene.setNodeFilter(/floor_ring/);
+    }
+  }
+
+  onXREnded() {
+    if (this.scene) { this.scene.setNodeFilter(null); }
   }
 
   onXRFrame(timestamp, timeDelta, xrFrame) {

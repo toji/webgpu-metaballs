@@ -343,7 +343,7 @@ export class Renderer {
     // Override with renderer-specific frame logic.
   }
 
-  async setWebXRSession(session) {
+  async setWebXRSession(session, options) {
     this.xrSession = session;
     if (!this.xrSession) {
       this.onXREnded();
@@ -351,7 +351,7 @@ export class Renderer {
       return;
     }
 
-    await this.onXRStarted();
+    await this.onXRStarted(options);
     this.xrSession.requestAnimationFrame(this.xrFrameCallback);
   }
 

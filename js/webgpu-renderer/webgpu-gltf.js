@@ -38,6 +38,8 @@ export class WebGPUglTF {
 
     this.renderBundles = new WeakMap();
 
+    this.nodeFilter = null;
+
     this._initGLTF(gltf);
   }
 
@@ -205,6 +207,9 @@ export class WebGPUglTF {
         primitive.renderData.instances = [];
       }
       primitive.renderData.instances.push(node.worldMatrix);
+
+      // TODO: Support multiple instances
+      primitive.renderData.name = node.name;
     }
 
     for (let childNode of node.children) {
@@ -212,10 +217,15 @@ export class WebGPUglTF {
     }
   }
 
+  setNodeFilter(nodeFilter) {
+    this.renderBundles = new WeakMap();
+    this.nodeFilter = nodeFilter;
+  }
+
   draw(passEncoder, view) {
     let renderBundle = this.renderBundles.get(view);
     if (!renderBundle && this.renderBundleHelper) {
-      renderBundle = this.renderBundleHelper.createRenderBundle(this.primitives, view);
+      renderBundle = this.renderBundleHelper.createRenderBundle(this.primitives, view, this.nodeFilter);
       this.renderBundles.set(view, renderBundle);
     }
     if (renderBundle) {

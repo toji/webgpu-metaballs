@@ -81,7 +81,9 @@
         environmentLights: true,
         metaballLights: !isMobile,
         metaballStyle: 'lava',
-        metaballResolution: isMobile ? 0.1 : 0.075
+        metaballResolution: isMobile ? 0.1 : 0.075,
+        xrSessionType: 'immersive-vr',
+        xrScaleFactor: 1.0,
       };
 
       const stats = new PerformanceTracker();
@@ -160,17 +162,17 @@
           return;
         }
 
-        xrSession = await navigator.xr.requestSession('immersive-vr', {
+        xrSession = await navigator.xr.requestSession(appSettings.xrSessionType, {
           requiredFeatures: ['webgpu', 'local-floor'],
         });
         console.log('Got a WebXR Session!');
-        renderer.setWebXRSession(xrSession);
-        xrButton.title = 'Exit VR';
+        renderer.setWebXRSession(xrSession, { scaleFactor: appSettings.xrScaleFactor });
+        xrButton.title = 'Exit XR';
 
         xrSession.addEventListener('end', () => {
           renderer.setWebXRSession(null);
           xrSession = null;
-          xrButton.title = 'Enter VR';
+          xrButton.title = 'Enter XR';
         });
       }
 
@@ -179,14 +181,35 @@
           console.log('WebGPU/WebXR bindings not supported.');
           return;
         }
-        const supported = await navigator.xr.isSessionSupported('immersive-vr');
-        if (!supported) {
-          console.log('immersive-vr sessions not supported.');
+
+        const vrSupported = await navigator.xr.isSessionSupported('immersive-vr');
+        const arSupported = await navigator.xr.isSessionSupported('immersive-ar');
+
+        if (!vrSupported && !arSupported) {
+          console.log('No WebXR sessions are supported.');
           return;
         }
 
-        xrButton = pane.addButton({ title: 'Enter VR' });
+        const xrFolder = pane.addFolder({
+          title: `WebXR`,
+          expanded: false,
+        });
+
+        xrButton = xrFolder.addButton({ title: 'Enter XR' });
         xrButton.on('click', toggleWebXR);
+
+        const xrOptions = {};
+        if (arSupported) {
+          xrOptions.AR = 'immersive-ar';
+          appSettings.xrSessionType = 'immersive-ar';
+        }
+        if (vrSupported) {
+          xrOptions.VR = 'immersive-vr';
+          appSettings.xrSessionType = 'immersive-vr';
+        }
+        xrFolder.addBinding(appSettings, 'xrSessionType', { options: xrOptions });
+
+        xrFolder.addBinding(appSettings, 'xrScaleFactor', { min: 0.25, max: 1.25 });
       }
 
       async function init() {
