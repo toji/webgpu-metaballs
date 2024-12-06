@@ -125,7 +125,7 @@ export class RenderBundleHelper {
     return this.pipelineCache.getRenderPipeline(pipelineDescriptor);
   }
 
-  createRenderBundle(primitives, view) {
+  createRenderBundle(primitives, view, nodeFilter = null) {
     // Generate a render bundle that draws all the given primitives with the specified technique.
     // The sort up front is a bit heavy, but that's OK because the end result is a render bundle
     // will excute very quickly.
@@ -134,6 +134,9 @@ export class RenderBundleHelper {
     const pipelineMaterials = new Map(); // WeakMap<id -> Map<Material -> Primitive[]>>
 
     for (const primitive of primitives) {
+      // If there's a node filter, skip any primitives that don't match the nodes we're looking for.
+      if (nodeFilter && !primitive.renderData.name?.match(nodeFilter)) { continue; }
+
       const pipeline = this.getPrimitivePipeline(primitive);
 
       if (primitive.material.blend) {
