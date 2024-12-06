@@ -92,24 +92,10 @@
         title: document.title.split('|')[0],
       });
 
-      stats.bindToTweakpane(pane, true);
-
-      pane.addBinding(appSettings, 'metaballMethod', { options: {
-        'writeBuffer()': 'writeBuffer',
-        'New buffer each frame': 'newBuffer',
-        'New staging buffer each frame': 'newStaging',
-        'Single staging buffer re-mapped each frame': 'singleStaging',
-        'Ring of staging buffers': 'stagingRing',
-        'Compute shader': 'gpuGenerated',
-        'Point Cloud': 'pointCloud'
-      }}).on('change', (ev) => {
-        if (renderer) {
-          renderer.setMetaballMethod(appSettings.metaballMethod);
-        }
-      });
+      stats.bindToTweakpane(pane, false);
 
       const renderOptions = pane.addFolder({
-        title: `Rendering`,
+        title: `Rendering Options`,
         expanded: false,
       });
       renderOptions.addBinding(appSettings, 'renderLightSprites').on('change', () => {
@@ -130,6 +116,20 @@
       renderOptions.addBinding(appSettings, 'metaballLights').on('change', () => {
         if (renderer) {
           renderer.enableLights(appSettings.environmentLights, appSettings.metaballLights);
+        }
+      });
+
+      renderOptions.addBinding(appSettings, 'metaballMethod', { options: {
+        'writeBuffer()': 'writeBuffer',
+        'New buffer each frame': 'newBuffer',
+        'New staging buffer each frame': 'newStaging',
+        'Single staging buffer re-mapped each frame': 'singleStaging',
+        'Ring of staging buffers': 'stagingRing',
+        'Compute shader': 'gpuGenerated',
+        'Point Cloud': 'pointCloud'
+      }}).on('change', (ev) => {
+        if (renderer) {
+          renderer.setMetaballMethod(appSettings.metaballMethod);
         }
       });
 
