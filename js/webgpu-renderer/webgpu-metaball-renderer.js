@@ -571,26 +571,31 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
       // Metaball GPU resources
       const resources = {
         metaballBuffer: this.device.createBuffer({
+          label: 'Metaballs Buffer',
           size: this.metaballBufferSize,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         }),
 
         vertexBuffer: this.device.createBuffer({
+          label: 'Metaballs Vertex Buffer',
           size: this.vertexBufferSize,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
         }),
 
         normalBuffer: this.device.createBuffer({
+          label: 'Metaballs Normal Buffer',
           size: this.vertexBufferSize,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.VERTEX,
         }),
 
         indexBuffer: this.device.createBuffer({
+          label: 'Metaballs Index Buffer',
           size: this.indexBufferSize,
-          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
         }),
 
         indirectBuffer: this.device.createBuffer({
+          label: 'Metaballs Indirect Buffer',
           size: this.indirectArray.byteLength,
           usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST,
         }),
@@ -753,13 +758,16 @@ export class MetaballComputeRenderer extends WebGPUMetaballRendererBase {
     // Pipeline may not be ready because it's created asynchronously.
     if (!this.pipeline) { return; }
 
+    const resource = this.resources[this.drawIndex];
+
     if (this.renderer.needsComputeWorkaround) {
       // Do a regular indexed draw.
-      super.draw(passEncoder);
+      this.vertexBuffer = resource.vertexBuffer;
+      this.normalBuffer = resource.normalBuffer;
+      this.indexBuffer = resource.indexBuffer;
+      super.draw(passEncoder, view);
       return;
     }
-
-    const resource = this.resources[this.drawIndex];
 
     passEncoder.setPipeline(this.pipeline);
     passEncoder.setBindGroup(BIND_GROUP.Frame, view.bindGroup);

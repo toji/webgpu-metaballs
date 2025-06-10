@@ -105,10 +105,6 @@ class LightManager {
   }
 }
 
-function randomBetween(min, max) {
-  return Math.random() * (max - min) + min;
-}
-
 export class Renderer {
   constructor() {
     this.canvas = document.createElement('canvas');

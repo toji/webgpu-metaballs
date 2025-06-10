@@ -65,6 +65,8 @@ export class WebGPURenderer extends Renderer {
 
     this.metaballMethod = null;
 
+    this.needsComputeWorkaround = false;
+
     this.xrBinding = null;
     this.xrLayer = null;
     this.xrRefSpace = null;
@@ -77,7 +79,9 @@ export class WebGPURenderer extends Renderer {
       xrCompatible: true,
     });
 
-    this.adapterInfo = this.adapter.adapterInfo;
+    // Some Qualcomm devices (like the Pixel 4) have issues with the indirect draw commands used
+    // normally, so use an alternate path for them.
+    this.needsComputeWorkaround = this.adapter.info?.architecture === 'adreno-6xx';
 
     // Enable compressed textures if available
     const requiredFeatures = [];
@@ -236,10 +240,6 @@ export class WebGPURenderer extends Renderer {
     this.metaballsNeedUpdate = true;
 
     this.timestampHelper = new TimestampHelper(this.device);
-  }
-
-  get needComputeWorkaround() {
-    this.adapterInfo.architecture == 'adreno-6xx';
   }
 
   setScene(gltf) {
