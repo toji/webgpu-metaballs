@@ -98,7 +98,7 @@ export class WebGPURenderer extends Renderer {
     }
 
     // Enable timestamp queries if available
-    if (this.adapter.features.has('timestamp-query') != -1) {
+    if (this.adapter.features.has('timestamp-query')) {
       requiredFeatures.push('timestamp-query');
     }
 
