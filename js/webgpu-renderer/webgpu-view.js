@@ -67,46 +67,66 @@ export class WebGPUView {
 
     this.msaaTexture = null;
     this.msaaTextureView = null;
+    this.msaaTextureDescriptor = null;
     this.depthTexture = null;
     this.depthTextureView = null;
+    this.depthTextureDescriptor = null;
   }
 
   getMsaaTextureView(colorTexture, sampleCount) {
-    if (!this.msaaTexture || this.msaaTexture?.sampleCount != sampleCount,
-        this.msaaTexture?.format != colorTexture.format ||
-        this.msaaTexture?.width != colorTexture.width ||
-        this.msaaTexture?.height != colorTexture.height) {
+    const msaaTextureDescriptor = {
+      sampleCount,
+      format: colorTexture.format,
+      width: colorTexture.width,
+      height: colorTexture.height,
+    };
+    if (!this.msaaTexture ||
+        !this.msaaTextureDescriptor ||
+        this.msaaTextureDescriptor.sampleCount != msaaTextureDescriptor.sampleCount ||
+        this.msaaTextureDescriptor.format != msaaTextureDescriptor.format ||
+        this.msaaTextureDescriptor.width != msaaTextureDescriptor.width ||
+        this.msaaTextureDescriptor.height != msaaTextureDescriptor.height) {
       // Explicitly destroying previous textures when resizing helps avoid
       // Out of Memory errors on the GPU.
       if (this.msaaTexture) { this.msaaTexture.destroy(); }
       this.msaaTexture = this.renderer.device.createTexture({
         label: `MSAA, view.id:${this.id}`,
-        size: { width: colorTexture.width, height: colorTexture.height },
-        sampleCount,
-        format: colorTexture.format,
+        size: { width: msaaTextureDescriptor.width, height: msaaTextureDescriptor.height },
+        sampleCount: msaaTextureDescriptor.sampleCount,
+        format: msaaTextureDescriptor.format,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
       this.msaaTextureView = this.msaaTexture.createView();
+      this.msaaTextureDescriptor = msaaTextureDescriptor;
     }
     return this.msaaTextureView;
   }
 
   getDepthTextureView(colorTexture, format, sampleCount) {
-    if (!this.depthTexture || this.depthTexture?.sampleCount != sampleCount,
-        this.depthTexture?.format != format ||
-        this.depthTexture?.width != colorTexture.width ||
-        this.depthTexture?.height != colorTexture.height) {
+    const depthTextureDescriptor = {
+      sampleCount,
+      format,
+      width: colorTexture.width,
+      height: colorTexture.height,
+    };
+    if (!this.depthTexture ||
+        !this.depthTextureDescriptor ||
+        this.depthTextureDescriptor.sampleCount != depthTextureDescriptor.sampleCount ||
+        this.depthTextureDescriptor.format != depthTextureDescriptor.format ||
+        this.depthTextureDescriptor.width != depthTextureDescriptor.width ||
+        this.depthTextureDescriptor.height != depthTextureDescriptor.height) {
       // Explicitly destroying previous textures when resizing helps avoid
       // Out of Memory errors on the GPU.
       if (this.depthTexture) { this.depthTexture.destroy(); }
       this.depthTexture = this.renderer.device.createTexture({
         label: `Depth, view.id:${this.id}`,
-        size: { width: colorTexture.width, height: colorTexture.height },
-        sampleCount,
-        format,
+        size: { width: depthTextureDescriptor.width, height: depthTextureDescriptor.height },
+        sampleCount: depthTextureDescriptor.sampleCount,
+        format: depthTextureDescriptor.format,
         usage: GPUTextureUsage.RENDER_ATTACHMENT,
       });
       this.depthTextureView = this.depthTexture.createView();
+      this.depthTextureDescriptor = depthTextureDescriptor;
     }
     return this.depthTextureView;
   }
@@ -143,11 +163,9 @@ export class WebGPUView {
     mat4.copy(this.projectionMatrix, xrView.projectionMatrix);
     mat4.invert(this.inverseProjectionMatrix, this.projectionMatrix);
     mat4.copy(this.viewMatrix, xrView.transform.inverse.matrix);
-    vec3.copy(this.cameraPosition, [
-      xrView.transform.position.x,
-      xrView.transform.position.y,
-      xrView.transform.position.z
-    ]);
+    this.cameraPosition[0] = xrView.transform.position.x;
+    this.cameraPosition[1] = xrView.transform.position.y;
+    this.cameraPosition[2] = xrView.transform.position.z;
 
     device.queue.writeBuffer(this.projectionBuffer, 0, this.uniformsArray.buffer, 0, ProjectionUniformsSize);
     device.queue.writeBuffer(this.viewBuffer, 0, this.uniformsArray.buffer, ProjectionUniformsSize, ViewUniformsSize);

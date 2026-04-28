@@ -372,16 +372,19 @@ export class WebGPURenderer extends Renderer {
 
     passEncoder.end();
 
-    this.timestampHelper.resolve(commandEncoder);
+    const didResolveTimestamps = this.timestampHelper.resolve(commandEncoder);
 
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
 
-    this.timestampHelper.read().then((results) => {
-      for (let [key, result] of Object.entries(results)) {
-        this.stats.addSample(key, result);
-      }
-    });
+    if (didResolveTimestamps) {
+      this.timestampHelper.read().then((results) => {
+        if (!results || !this.stats) { return; }
+        for (let [key, result] of Object.entries(results)) {
+          this.stats.addSample(key, result);
+        }
+      });
+    }
   }
 
   async onXRStarted(options) {
@@ -482,15 +485,18 @@ export class WebGPURenderer extends Renderer {
       renderPass.end();
     }
 
-    this.timestampHelper.resolve(commandEncoder);
+    const didResolveTimestamps = this.timestampHelper.resolve(commandEncoder);
 
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
 
-    this.timestampHelper.read().then((results) => {
-      for (let [key, result] of Object.entries(results)) {
-        this.stats.addSample(key, result);
-      }
-    });
+    if (didResolveTimestamps) {
+      this.timestampHelper.read().then((results) => {
+        if (!results || !this.stats) { return; }
+        for (let [key, result] of Object.entries(results)) {
+          this.stats.addSample(key, result);
+        }
+      });
+    }
   }
 }

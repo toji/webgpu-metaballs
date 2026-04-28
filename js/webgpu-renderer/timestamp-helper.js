@@ -12,6 +12,7 @@ export class TimestampHelper {
     #timestampReadbackBuffers = [];
     #readbackBufferCount = 0;
     #currentReadbackBuffer = null;
+    #readbackPromise = null;
     #passTimings = new Map();
     #maxPassCount = 0;
     #nextQueryIndex = 0;
@@ -40,11 +41,11 @@ export class TimestampHelper {
         if (!this.#timestampsSupported) {
             return undefined;
         }
-        if (this.#currentReadbackBuffer) {
-            throw new Error('Must read back the previous resolve before new timestampes can be added.');
+        if (this.#currentReadbackBuffer || this.#readbackPromise) {
+            return undefined;
         }
         if (this.#nextQueryIndex >= this.#maxPassCount * 2) {
-            throw new Error('Exceeded the number of passes that can be queried in a single resolve.');
+            return undefined;
         }
         const timestampWrites = {
             querySet: this.#timestampQuerySet,
@@ -60,10 +61,10 @@ export class TimestampHelper {
     }
     resolve(commandEncoder) {
         if (!this.#timestampsSupported) {
-            return;
+            return false;
         }
-        if (this.#currentReadbackBuffer) {
-            throw new Error('Must read back the previous resolve before resolve can be called again.');
+        if (this.#currentReadbackBuffer || this.#readbackPromise || this.#nextQueryIndex == 0) {
+            return false;
         }
         if (this.#timestampReadbackBuffers.length > 0) {
             this.#currentReadbackBuffer = this.#timestampReadbackBuffers.pop();
@@ -78,67 +79,81 @@ export class TimestampHelper {
         }
         commandEncoder.resolveQuerySet(this.#timestampQuerySet, 0, this.#nextQueryIndex, this.#timestampResolveBuffer, 0);
         commandEncoder.copyBufferToBuffer(this.#timestampResolveBuffer, 0, this.#currentReadbackBuffer, 0, this.#timestampResolveBuffer.size);
+        return true;
     }
     async read() {
+        if (this.#readbackPromise) {
+            return this.#readbackPromise;
+        }
         if (!this.#currentReadbackBuffer) {
             return;
         }
         let readbackBuffer = this.#currentReadbackBuffer;
         let queries = new Map(this.#queriesUsed);
-        this.#currentReadbackBuffer = null;
         this.#queriesUsed.clear();
         this.#nextQueryIndex = 0;
-        await readbackBuffer.mapAsync(GPUMapMode.READ);
-        const mappedArray = new BigUint64Array(readbackBuffer.getMappedRange());
-        const results = {};
-        for (const [name, query] of queries.entries()) {
-            const passTime = Number(mappedArray[query.end] - mappedArray[query.begin]);
-            // Discard negative times
-            if (passTime >= 0) {
-                let passTimings = this.#passTimings.get(name);
-                if (!passTimings) {
-                    passTimings = {
-                        values: new Array(AVG_SAMPLE_COUNT),
-                        index: 0,
-                    };
-                    this.#passTimings.set(name, passTimings);
-                }
-                // Storing pass timings in µs
-                let passTimeMicro = passTime / 1000;
-                passTimings.values[passTimings.index++ % AVG_SAMPLE_COUNT] = passTimeMicro;
-                if (passTimings.index % AVG_SAMPLE_COUNT == 0) {
-                    // Update the average
-                    let avg = 0;
-                    for (const value of passTimings.values) {
-                        avg += value;
+        this.#readbackPromise = (async () => {
+            await readbackBuffer.mapAsync(GPUMapMode.READ);
+            const mappedArray = new BigUint64Array(readbackBuffer.getMappedRange());
+            const results = {};
+            for (const [name, query] of queries.entries()) {
+                const passTime = Number(mappedArray[query.end] - mappedArray[query.begin]);
+                // Discard negative times
+                if (passTime >= 0) {
+                    let passTimings = this.#passTimings.get(name);
+                    if (!passTimings) {
+                        passTimings = {
+                            values: new Array(AVG_SAMPLE_COUNT),
+                            index: 0,
+                        };
+                        this.#passTimings.set(name, passTimings);
                     }
-                    this.#averages[name] = avg / AVG_SAMPLE_COUNT;
-                }
-                results[name] = passTimeMicro;
-            }
-        }
-        // Update any existing keys not in the queries to 0. This way if one of them
-        // isn't present in the readback it will zero out instead of appearing to
-        // stay steady at the last reading.
-        for (const name of this.#passTimings.keys()) {
-            if (!queries.has(name)) {
-                let passTimings = this.#passTimings.get(name);
-                passTimings.values[passTimings.index++ % AVG_SAMPLE_COUNT] = 0;
-                if (passTimings.index % AVG_SAMPLE_COUNT == 0) {
-                    // Update the average
-                    let avg = 0;
-                    for (const value of passTimings.values) {
-                        avg += value;
+                    // Storing pass timings in µs
+                    let passTimeMicro = passTime / 1000;
+                    passTimings.values[passTimings.index++ % AVG_SAMPLE_COUNT] = passTimeMicro;
+                    if (passTimings.index % AVG_SAMPLE_COUNT == 0) {
+                        // Update the average
+                        let avg = 0;
+                        for (const value of passTimings.values) {
+                            avg += value;
+                        }
+                        this.#averages[name] = avg / AVG_SAMPLE_COUNT;
                     }
-                    this.#averages[name] = avg / AVG_SAMPLE_COUNT;
+                    results[name] = passTimeMicro;
                 }
             }
+            // Update any existing keys not in the queries to 0. This way if one of them
+            // isn't present in the readback it will zero out instead of appearing to
+            // stay steady at the last reading.
+            for (const name of this.#passTimings.keys()) {
+                if (!queries.has(name)) {
+                    let passTimings = this.#passTimings.get(name);
+                    passTimings.values[passTimings.index++ % AVG_SAMPLE_COUNT] = 0;
+                    if (passTimings.index % AVG_SAMPLE_COUNT == 0) {
+                        // Update the average
+                        let avg = 0;
+                        for (const value of passTimings.values) {
+                            avg += value;
+                        }
+                        this.#averages[name] = avg / AVG_SAMPLE_COUNT;
+                    }
+                }
+            }
+            readbackBuffer.unmap();
+            this.#timestampReadbackBuffers.push(readbackBuffer);
+            return results;
+        })();
+        try {
+            return await this.#readbackPromise;
         }
-        readbackBuffer.unmap();
-        this.#timestampReadbackBuffers.push(readbackBuffer);
-        return results;
+        finally {
+            if (this.#currentReadbackBuffer === readbackBuffer) {
+                this.#currentReadbackBuffer = null;
+            }
+            this.#readbackPromise = null;
+        }
     }
-    hasPendingResults() { return this.#nextQueryIndex != 0; }
+    hasPendingResults() { return this.#nextQueryIndex != 0 || !!this.#currentReadbackBuffer || !!this.#readbackPromise; }
     get averages() {
         return this.#averages;
     }

@@ -16,7 +16,7 @@ export class PerformanceEntry {
         this.buffer = new Array(bufferLength);
     }
     addSample(value) {
-        this.#lastBufferIndex = (this.#lastBufferIndex + 1 % this.buffer.length);
+        this.#lastBufferIndex = (this.#lastBufferIndex + 1) % this.buffer.length;
         this.buffer[this.#lastBufferIndex] = value;
     }
     get latest() {
