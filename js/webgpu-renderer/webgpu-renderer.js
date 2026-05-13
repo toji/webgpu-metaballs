@@ -372,12 +372,13 @@ export class WebGPURenderer extends Renderer {
 
     passEncoder.end();
 
-    this.timestampHelper.resolve(commandEncoder);
+    const timestampResults = this.timestampHelper.resolve(commandEncoder);
 
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
 
-    this.timestampHelper.read().then((results) => {
+    // Must be called after submit.
+    timestampResults.read().then((results) => {
       for (let [key, result] of Object.entries(results)) {
         this.stats.addSample(key, result);
       }
@@ -482,12 +483,12 @@ export class WebGPURenderer extends Renderer {
       renderPass.end();
     }
 
-    this.timestampHelper.resolve(commandEncoder);
+    const timestampResults = this.timestampHelper.resolve(commandEncoder);
 
     const commandBuffer = commandEncoder.finish();
     this.device.queue.submit([commandBuffer]);
 
-    this.timestampHelper.read().then((results) => {
+    timestampResults.read().then((results) => {
       for (let [key, result] of Object.entries(results)) {
         this.stats.addSample(key, result);
       }
