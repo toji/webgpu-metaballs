@@ -134,7 +134,6 @@ export class Renderer {
       lastTimestamp = timestamp;
       this.rafId = requestAnimationFrame(this.frameCallback);
       this.frameCount++;
-      if (this.frameCount % 200 == 0) { return; }
 
       if (this.stats) {
         this.stats.beginFrame();
