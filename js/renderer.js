@@ -153,7 +153,6 @@ export class Renderer {
       lastTimestamp = timestamp;
       this.rafId = this.xrSession.requestAnimationFrame(this.xrFrameCallback);
       this.frameCount++;
-      if (this.frameCount % 200 == 0) { return; }
 
       if (this.stats) {
         this.stats.beginFrame();
