@@ -469,7 +469,7 @@ export class WebGPURenderer extends Renderer {
           depthStencilAttachment: {
             view: gpuView.getDepthTextureView(subImage.colorTexture, DEPTH_FORMAT, SAMPLE_COUNT),
             depthLoadOp: 'clear',
-            depthStoreOp: 'store',
+            depthStoreOp: 'discard',
             depthClearValue: 1.0,
           },
           timestampWrites: this.timestampHelper.timestampWrites(`View ${viewIndex}`)
